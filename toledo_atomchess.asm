@@ -11,6 +11,7 @@
         ; Revision. Jun/01/2015 10:08 local time. Solved bug where computer bishops never moved over upper diagonals.
         ; Revision: Oct/06/2015 06:38 local time. Optimized board setup/display, plus tiny bits.
         ; Revision: Oct/07/2015 14:47 local time. More optimization and debugged.
+        ; Revision: Oct/10/2015 08:21 local time. More optimization.
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -19,7 +20,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 456 bytes size (fits in a boot sector)
+        ; * 446 bytes size (fits in a boot sector)
 
         ; Note: I'm lazy enough to write my own assembler instead of
         ;       searching for one, so you will have to excuse my syntax ;)
@@ -88,7 +89,7 @@ play:   mov bp,-32768   ; Current score
 sr7:    lodsb           ; Read square
         xor al,ch       ; XOR with current playing side
         dec ax
-        cmp al,6        ; Ignore if frontier
+        cmp al,6        ; Ignore if frontier or empty
         jnc sr6
         or al,al        ; Is it pawn?
         jnz sr8
@@ -121,7 +122,7 @@ sr9:    add di,cx
         cmp dh,16+displacement       ; Pawn?
         jc sr19
         test cl,1       ; Straight?
-        je sr18         ; Yes, avoid
+        je sr17         ; Yes, avoid and cancels any double square movement
         jmp short sr19
 
 sr10:   cmp dh,16+displacement       ; Pawn?
@@ -159,18 +160,16 @@ sr20:   xlat
 sr22:   cmp bp,ax       ; Better score?
         jg sr23         ; No, jump
         xchg ax,bp      ; New best score
-        jne sr27
+        jne sr23        ; Same score?
         in al,(0x40)
-        cmp al,0x55      ; Randomize it
-        jb sr23
-sr27:   pop ax
-        add sp,4
-        push si         ; Save movement
-        push di
-        push ax
+        cmp al,0xaa      ; Randomize it
 sr23:   pop ax          ; Restore board
         mov [si],al
         mov [di],ah
+        jg sr18
+        add sp,4
+        push si         ; Save movement
+        push di
 
 sr18:   dec ax
         and al,0x07      ; Was it pawn?
@@ -184,9 +183,7 @@ sr16:   jmp short sr14
 sr11:   and cl,0x1f      ; Advanced it first square?
         cmp cl,0x10
         jnz sr14
-sr15:   or ah,ah        ; Pawn to empty square?
-        jnz sr17        ; No, cancel double-square movement
-        mov ax,si
+        mov ax,si       ; Already checked for move to empty square
         sub al,0x20
         cmp al,0x40      ; At top or bottom firstmost row?
         jb sr17         ; No, cancel double-square movement
@@ -214,8 +211,13 @@ display_board:
 sr4:    lodsb
         mov bx,chars
         xlat
-        call display2
-sr5:    loop sr4
+        cmp al,0x0d      ; Is it RC?
+        jnz sr5         ; No, jump
+        add si,7        ; Jump 7 frontier bytes
+        call display    ; Display RC
+        mov al,0x0a      ; Now display LF
+sr5:    call display
+        loop sr4
         ret
 
         ; Read algebraic coordinate
@@ -230,22 +232,13 @@ key2:   call key        ; Read letter
 key:
         mov ah,0        ; Read keyboard
         int 0x16         ; Call BIOS
-        call display
-        and ax,0x0f
-        ret
-
-display2:
-        cmp al,0x0d      ; Is it RC?
-        jnz display     ; No, jump
-        add si,7        ; Jump 7 frontier bytes
-        call display    ; Display RC
-        mov al,0x0a      ; Now display LF
 display:
         pusha
         mov ah,0x0e      ; Console output
         mov bh,0x00
         int 0x10         ; Call BIOS
         popa
+        and ax,0x0f
         ret
 
 initial:
@@ -265,8 +258,8 @@ displacement:
         db -15,-17,-16,-32
         db 15,17,16,32
 
-        ; 54 bytes to say something
-        db "Toledo Atomchess"
+        ; 64 bytes to say something
+        db "Toledo Atomchess 10oct2015"
         db " (c)2015 Oscar Toledo G. "
         db "nanochess.org"
 
