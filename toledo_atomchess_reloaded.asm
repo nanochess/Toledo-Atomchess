@@ -11,12 +11,13 @@
         ; Revision: 26-may-2015. Checks for illegal moves. Handles promotion
         ;                        to queen, en passant and castling.
         ; Revision: 04-jun-2015. At last fully debugged.
+        ; Revision: 06-oct-2015. Optimized board initialization/display and other tiny bits.
 
         ; Features:
         ; * Full chess movements (except promotion only to queen)
         ; * Enter moves as algebraic form (D2D4) (your moves are validated)
         ; * Search depth of 3-ply
-        ; * 831 bytes size (fits in two boot sectors)
+        ; * 812 bytes size (fits in two boot sectors)
 
         ; Note: I'm lazy enough to write my own assembler instead of
         ;       searching for one, so you will have to excuse my syntax ;)
@@ -47,28 +48,27 @@ sr0:    push ds
         pop ds
         jb sr0
         ; Create board
-        mov bx,board
-sr1:    mov al,bl
+        mov di,board-8
+        mov cx,0x0108
+sr1:    push di
+        pop ax
         and al,0x88      ; 0x88 board
         jz sr2
         mov al,0x07      ; Frontier
-sr2:    mov [bx],al
-        inc bl
-        jnz sr1
+sr2:    stosb
+        loop sr1
         ; Setup board
         mov si,initial
         mov [enp],si    ; Reset en passant state
+        mov di,board
+        mov cl,0x08
 sr3:    lodsb           ; Load piece
-        mov [bx],al     ; Black pieces
+        stosb           ; Black pieces
         or al,8
-        mov [bx+0x70],al ; White pieces
-        mov al,0x11
-        mov [bx+0x10],al ; Black pawn
-        mov al,0x19
-        mov [bx+0x60],al ; White pawn
-        inc bx
-        cmp bl,0x08
-        jnz sr3
+        mov [di+0x6f],al ; White pieces
+        mov byte [di+0x0f],0x11 ; Black pawn
+        mov byte [di+0x5f],0x19 ; White pawn
+        loop sr3
 
         ;
         ; Main loop
@@ -115,14 +115,14 @@ sr7:    lodsb           ; Read square
         jnz sr25        ; No, jump
 sr8:    inc ax          ; Inverse direction for pawn
 sr25:   dec si
-        mov bx,offsets
         push ax
+        and al,0x04
+        add al,0x04
+        mov dl,al       ; Total movements of piece in dl
+        pop ax
+        mov bx,offsets
         xlat
         mov dh,al       ; Movements offset in dh
-        pop ax
-        add al,total-offsets
-        xlat
-        mov dl,al       ; Total movements of piece in dl
 sr12:   mov di,si       ; Restart target square
         mov bx,displacement
         mov al,dh
@@ -276,14 +276,14 @@ scores:
         ;
         ; This marker is required for BIOS to boot floppy disk
         ;
-        resb 0x01fe-($-$$)     ; REPLACE with nothing for COM file
+        resb 0x01fe-($-$$)      ; REPLACE with nothing for COM file
         db 0x55,0xaa      ; REPLACE with nothing for COM file
 
         ; Start of second sector
 
 sr28:   cmp bp,ax       ; Better score?
         jg sr23         ; No, jump
-        mov bp,ax       ; New best score
+        xchg ax,bp      ; New best score
         jne sr27
         in al,(0x40)
         cmp al,0x55      ; Randomize it
@@ -378,52 +378,46 @@ sr6:    cmp si,board+120
 sr24:   xor ch,8
         ret
 
-display_board:
         ; Display board
-        call display3
-        mov si,board
+display_board:
+        mov si,board-8
+        mov cx,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
 sr4:    lodsb
         and al,0x0f
         mov bx,chars
         xlat
         call display2
-sr5:    cmp si,board+128
-        jnz sr4
+sr5:    loop sr4
         ret
 
-key2:
-        mov di,board+127
-        call key
-        add di,ax
-        call key
-        shl al,4
+        ; Read algebraic coordinate
+key2:   call key        ; Read letter
+        add ax,board+127 ; Calculate board column
+        push ax
+        call key        ; Read digit
+        pop di
+        shl al,4        ; Substract digit row multiplied by 16
         sub di,ax
         ret
 key:
-        push di
-        mov ah,0
-        int 0x16
-        push ax
+        mov ah,0        ; Read keyboard
+        int 0x16         ; Call BIOS
         call display
-        pop ax
         and ax,0x0f
-        pop di
         ret
 
 display2:
-        cmp al,0x0d
-        jnz display
-display3:
-        add si,7
-        mov al,0x0a
-        call display
-        mov al,0x0d
+        cmp al,0x0d      ; Is it RC?
+        jnz display     ; No, jump
+        add si,7        ; Jump 7 frontier bytes
+        call display    ; Display RC
+        mov al,0x0a      ; Now display LF
 display:
-        push si
-        mov ah,0x0e
+        pusha
+        mov ah,0x0e      ; Console output
         mov bh,0x00
-        int 0x10
-        pop si
+        int 0x10         ; Call BIOS
+        popa
         ret
 
 chars:
@@ -433,14 +427,13 @@ initial:
         db 0x12,0x15,0x13,0x14,0x16,0x13,0x15,0x12
 offsets:
         db 16,20,8,12,8,0,8
-total:
-        db  4, 4,4, 4,8,8,8
 
         ; Bytes to say something
         db "Toledo Atomchess reloaded"
+        db " (c)2015 Oscar Toledo G. "
         db "nanochess.org"
 
-        resb 0x0400-($-$$)     
+        resb 0x0400-($-$$)    
 
 board:  resb 256
 
