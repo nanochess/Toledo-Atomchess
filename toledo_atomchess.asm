@@ -5,9 +5,10 @@
         ;
         ; © Copyright 2015 Óscar Toledo Gutiérrez
         ;
-        ; Creation: 28-ene-2015 21:00 local time.
-        ; Revision: 29-ene-2015 18:17 local time. Finished.
-        ; Revision: 30-ene-2015 13:34 local time. Debugging finished.
+        ; Creation: Jan/28/2015 21:00 local time.
+        ; Revision: Jan/29/2015 18:17 local time. Finished.
+        ; Revision: Jan/30/2015 13:34 local time. Debugging finished.
+        ; Revision. Jun/01/2015 10:08 local time. Solved bug where computer bishops never moved over upper diagonals.
 
         ; Features:
         ; * Basic chess movements.
@@ -119,13 +120,13 @@ sr9:    add di,cx
         cmp ah,0x06
         mov ah,[di]
         jnc sr18        ; No, avoid
-        cmp dh,14       ; Pawn?
+        cmp dh,16       ; Pawn?
         jc sr19
         test cl,1       ; Straight?
         je sr18         ; Yes, avoid
         jmp short sr19
 
-sr10:   cmp dh,14       ; Pawn?
+sr10:   cmp dh,16       ; Pawn?
         jc sr19
         test cl,1       ; Diagonal?
         jne sr18        ; Yes, avoid
@@ -136,19 +137,19 @@ sr19:   push ax         ; Save for restoring in near future
         and al,7
         cmp al,6        ; King eaten?
         jne sr20
-        cmp sp,stack-(3+8+3)*2  ; If in first response...
+        cmp sp,stack-(4+8+4)*2  ; If in first response...
         mov bp,20000    ; ...maximum score (probably checkmate/slatemate)
-        jne sr26
+        je sr26
         mov bp,7811     ; Maximum score
 sr26:   add sp,6        ; Ignore values
         jmp short sr24
 
 sr20:   xlat
         cbw
-;        cmp sp,stack-(3+8+3+8+3+8+3+8+3)*2  ; 4-ply depth
-        cmp sp,stack-(3+8+3+8+3+8+3)*2  ; 3-ply depth
-;        cmp sp,stack-(3+8+3+8+3)*2  ; 2-ply depth
-;        cmp sp,stack-(3+8+3)*2  ; 1-ply depth
+;        cmp sp,stack-(4+8+4+8+4+8+4+8+4)*2  ; 4-ply depth
+        cmp sp,stack-(4+8+4+8+4+8+4)*2  ; 3-ply depth
+;        cmp sp,stack-(4+8+4+8+4)*2  ; 2-ply depth
+;        cmp sp,stack-(4+8+4)*2  ; 1-ply depth
         jbe sr22
         pusha
         movsb                   ; Do move
@@ -188,9 +189,8 @@ sr11:   and cl,0x1f      ; Advanced it first square?
 sr15:   or ah,ah        ; Pawn to empty square?
         jnz sr17        ; No, cancel double-square movement
         mov ax,si
-        cmp al,0x20      ; At first top row?
-        jb sr14         ; Yes, jump
-        cmp al,0x60      ; At first bottom row?
+        sub al,0x20
+        cmp al,0x40      ; At top or bottom firstmost row?
         jb sr17         ; No, cancel double-square movement
 sr14:   inc dh
         dec dl
@@ -265,14 +265,14 @@ chars:
         db ".prbqnk",0x0d,".PRBQNK"
 
 offsets:
-        db 14,18,8,12,8,0,8
+        db 16,20,8,12,8,0,8
 total:
         db  4, 4,4, 4,8,8,8
 displacement:
         db -33,-31,-18,-14,14,18,31,33
         db -16,16,-1,1
         db 15,17,-15,-17
-        db -16,-32
+        db -15,-17,-16,-32
         db 15,17,16,32
 
         ; 29 bytes to say something
@@ -287,3 +287,4 @@ displacement:
 board:  equ $
 
 stack:  equ $+512
+
