@@ -9,15 +9,17 @@
         ; Revision: Jan/29/2015 18:17 local time. Finished.
         ; Revision: Jan/30/2015 13:34 local time. Debugging finished.
         ; Revision. Jun/01/2015 10:08 local time. Solved bug where computer bishops never moved over upper diagonals.
+        ; Revision: Oct/06/2015 06:38 local time. Optimized board setup/display, plus tiny bits.
+        ; Revision: Oct/07/2015 14:47 local time. More optimization and debugged.
 
         ; Features:
-        ; * Basic chess movements.
+        ; * Computer plays legal basic chess movements ;)
         ; * Enter moves as algebraic form (D2D4) (note your moves aren't validated)
         ; * Search depth of 3-ply
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 481 bytes size (fits in a boot sector)
+        ; * 456 bytes size (fits in a boot sector)
 
         ; Note: I'm lazy enough to write my own assembler instead of
         ;       searching for one, so you will have to excuse my syntax ;)
@@ -37,27 +39,26 @@
         pop es
         pop ss
         ; Create board
-        mov bx,board
-sr1:    mov al,bl
+        mov di,board-8
+        mov cx,0x0108
+sr1:    push di
+        pop ax
         and al,0x88      ; 0x88 board
         jz sr2
         mov al,0x07      ; Frontier
-sr2:    mov [bx],al
-        inc bl
-        jnz sr1
+sr2:    stosb
+        loop sr1
         ; Setup board
         mov si,initial
+        mov di,board
+        mov cl,0x08
 sr3:    lodsb           ; Load piece
-        mov [bx],al     ; Black pieces
+        stosb           ; Black pieces
         or al,8
-        mov [bx+0x70],al ; White pieces
-        mov al,0x01
-        mov [bx+0x10],al ; Black pawn
-        mov al,0x09
-        mov [bx+0x60],al ; White pawn
-        inc bx
-        cmp bl,0x08
-        jnz sr3
+        mov [di+0x6f],al ; White pieces
+        mov byte [di+0x0f],0x01 ; Black pawn
+        mov byte [di+0x5f],0x09 ; White pawn
+        loop sr3
 
         ;
         ; Main loop
@@ -67,8 +68,7 @@ sr21:   call display_board
         push di
         call key2
         pop si
-        movsb
-        mov byte [si-1],0
+        call sr28
         call display_board
         mov ch,0x08      ; Current turn (0=White, 8=Black)
         call play
@@ -78,6 +78,7 @@ sr21:   call display_board
         ; Computer plays :)
         ;
 play:   mov bp,-32768   ; Current score
+        push cx         ; Current side
         push bp         ; Origin square
         push bp         ; Target square
 
@@ -95,19 +96,16 @@ sr7:    lodsb           ; Read square
         jnz sr25        ; No, jump
 sr8:    inc ax
 sr25:   dec si
-        mov bx,offsets
-        push ax
+        add al,0x04
+        mov dl,al       ; Total movements of piece in dl
+        and dl,0x0c
+        mov bx,offsets-4
         xlat
-        mov dh,al       ; Movements offset
-        pop ax
-        mov bl,total
-        xlat
-        mov dl,al       ; Total movements of piece
+        add al,displacement
+        mov dh,al       ; Movements offset in dh
 sr12:   mov di,si       ; Restart target square
-        mov bl,displacement
-        mov al,dh
-        xlat
-        mov cl,al
+        mov bl,dh
+        mov cl,[bx]
 sr9:    add di,cx
         and di,0xff
         or di,board
@@ -120,13 +118,13 @@ sr9:    add di,cx
         cmp ah,0x06
         mov ah,[di]
         jnc sr18        ; No, avoid
-        cmp dh,16       ; Pawn?
+        cmp dh,16+displacement       ; Pawn?
         jc sr19
         test cl,1       ; Straight?
         je sr18         ; Yes, avoid
         jmp short sr19
 
-sr10:   cmp dh,16       ; Pawn?
+sr10:   cmp dh,16+displacement       ; Pawn?
         jc sr19
         test cl,1       ; Diagonal?
         jne sr18        ; Yes, avoid
@@ -137,30 +135,30 @@ sr19:   push ax         ; Save for restoring in near future
         and al,7
         cmp al,6        ; King eaten?
         jne sr20
-        cmp sp,stack-(4+8+4)*2  ; If in first response...
+        cmp sp,stack-(5+8+5)*2  ; If in first response...
         mov bp,20000    ; ...maximum score (probably checkmate/slatemate)
         je sr26
         mov bp,7811     ; Maximum score
 sr26:   add sp,6        ; Ignore values
-        jmp short sr24
+        pop cx          ; Restore side
+        ret
 
 sr20:   xlat
         cbw
-;        cmp sp,stack-(4+8+4+8+4+8+4+8+4)*2  ; 4-ply depth
-        cmp sp,stack-(4+8+4+8+4+8+4)*2  ; 3-ply depth
-;        cmp sp,stack-(4+8+4+8+4)*2  ; 2-ply depth
-;        cmp sp,stack-(4+8+4)*2  ; 1-ply depth
+;        cmp sp,stack-(5+8+5+8+5+8+5+8+5)*2  ; 4-ply depth
+        cmp sp,stack-(5+8+5+8+5+8+5)*2  ; 3-ply depth
+;        cmp sp,stack-(5+8+5+8+5)*2  ; 2-ply depth
+;        cmp sp,stack-(5+8+5)*2  ; 1-ply depth
         jbe sr22
         pusha
-        movsb                   ; Do move
-        mov byte [si-1],ah      ; Clear origin square
+        call sr28       ; Do move
         call play
         mov bx,sp
         sub [bx+14],bp  ; Substract BP from AX
         popa
 sr22:   cmp bp,ax       ; Better score?
         jg sr23         ; No, jump
-        mov bp,ax       ; New best score
+        xchg ax,bp      ; New best score
         jne sr27
         in al,(0x40)
         cmp al,0x55      ; Randomize it
@@ -200,60 +198,54 @@ sr6:    cmp si,board+120
         jne sr7
         pop di
         pop si
+        pop cx
         cmp sp,stack-2
         jne sr24
         cmp bp,-16384   ; Illegal move? (always in check)
         jl sr24         ; Yes, doesn't move
-        movsb
-        mov byte [si-1],0
-sr24:   xor ch,8
-        ret
+sr28:   movsb           ; Do move
+        mov byte [si-1],0       ; Clear origin square
+sr24:   ret
 
-display_board:
         ; Display board
-        call display3
-        mov si,board
+display_board:
+        mov si,board-8
+        mov cx,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
 sr4:    lodsb
         mov bx,chars
         xlat
         call display2
-sr5:    cmp si,board+128
-        jnz sr4
+sr5:    loop sr4
         ret
 
-key2:
-        mov di,board+127
-        call key
-        add di,ax
-        call key
-        shl al,4
+        ; Read algebraic coordinate
+key2:   call key        ; Read letter
+        add ax,board+127 ; Calculate board column
+        push ax
+        call key        ; Read digit
+        pop di
+        shl al,4        ; Substract digit row multiplied by 16
         sub di,ax
         ret
 key:
-        push di
-        mov ah,0
-        int 0x16
-        push ax
+        mov ah,0        ; Read keyboard
+        int 0x16         ; Call BIOS
         call display
-        pop ax
         and ax,0x0f
-        pop di
         ret
 
 display2:
-        cmp al,0x0d
-        jnz display
-display3:
-        add si,7
-        mov al,0x0a
-        call display
-        mov al,0x0d
+        cmp al,0x0d      ; Is it RC?
+        jnz display     ; No, jump
+        add si,7        ; Jump 7 frontier bytes
+        call display    ; Display RC
+        mov al,0x0a      ; Now display LF
 display:
-        push si
-        mov ah,0x0e
+        pusha
+        mov ah,0x0e      ; Console output
         mov bh,0x00
-        int 0x10
-        pop si
+        int 0x10         ; Call BIOS
+        popa
         ret
 
 initial:
@@ -266,8 +258,6 @@ chars:
 
 offsets:
         db 16,20,8,12,8,0,8
-total:
-        db  4, 4,4, 4,8,8,8
 displacement:
         db -33,-31,-18,-14,14,18,31,33
         db -16,16,-1,1
@@ -275,8 +265,9 @@ displacement:
         db -15,-17,-16,-32
         db 15,17,16,32
 
-        ; 29 bytes to say something
+        ; 54 bytes to say something
         db "Toledo Atomchess"
+        db " (c)2015 Oscar Toledo G. "
         db "nanochess.org"
 
         ;
