@@ -19,7 +19,15 @@
         ;   and changed 16-bit load to 8-bit for 4 bytes.
         ; Revision: Oct/23/2015 20:31 local time.
         ;   Constants reduced on my own for other 2 bytes.
-
+        ; Revision: Oct/23/2015 20:45 local time.
+        ;   Removed push cx/pop cx because pusha/popa internally
+        ;   does the job, changed push di/pop ax to xchg ax,di
+        ;   after confirming INT 0x16 doesn't affect di (Peter Ferrie)
+        ;   4 bytes less.
+        ; Revision: Oct/23/2015 21:09 Solved bug where computer pawn could
+        ;   "jump" over own pawn. Saved two bytes more reusing ch as zero
+        ;   before first "call play"
+     
         ; Features:
         ; * Computer plays legal basic chess movements ;)
         ; * Enter moves as algebraic form (D2D4) (note your moves aren't validated)
@@ -27,11 +35,11 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 432 bytes size (runs in a boot sector) or 426 bytes (COM file)
+        ; * 428 bytes size (runs in a boot sector) or 422 bytes (COM file)
 
         use16
 
-        ; Edit this to 0 for a bootable sector
+        ; Note careful         ; Edit this to 0 for a bootable sector
         ; Edit this to 1 for a COM file
     %ifndef com_file
 com_file:       equ 0
@@ -42,6 +50,8 @@ com_file:       equ 0
     %else
         org 0x7c00
     %endif
+
+        ; Note careful use of side-effects along all code.
 
         ; Housekeeping
         mov sp,stack
@@ -87,9 +97,8 @@ sr21:   call display_board
         call key2
         pop si
         call sr28
-        call display_board
-        mov ch,0x08      ; Current turn (0=White, 8=Black)
-        call play
+        call display_board ; ch returned as zero to signal current side
+        call play       ; ch = 8=White, 0=Black
         jmp short sr21
 
 sr11:   cmp dl,2        ; Advanced it first square?
@@ -105,7 +114,6 @@ sr6:    cmp si,board+120
         jne sr7
         pop di
         pop si
-        pop cx
         cmp sp,stack-2
         jne sr24
         cmp bp,-127     ; Illegal move? (always in check)
@@ -118,11 +126,8 @@ sr24:   ret
         ; Computer plays :)
         ;
 play:   mov bp,-256     ; Current score
-        push cx         ; Current side
         push bp         ; Origin square
         push bp         ; Target square
-
-        xor ch,8        ; Change side
 
         mov si,board
 sr7:    lodsb           ; Read square
@@ -153,15 +158,15 @@ sr9:    add di,cx       ; Calculate target square for piece
         mov ah,[di]
         or ah,ah        ; Empty square?
         jz sr10
-        xor ah,ch
+        cmp dh,16+displacement       ; Pawn?
+        jc sr27
+        sar cl,1        ; Straight? (cl can be modified because only used once)
+        jnc sr17        ; Yes, avoid and cancels any double square movement
+sr27:   xor ah,ch
         sub ah,0x09     ; Valid capture?
         cmp ah,0x06
         mov ah,[di]
         jnc sr18        ; No, avoid
-        cmp dh,16+displacement       ; Pawn?
-        jc sr19
-        sar cl,1        ; Straight? (cl can be modified because only used once)
-        jnc sr17        ; Yes, avoid and cancels any double square movement
 
 sr19:   push ax         ; Save for restoring in near future
         mov bl,scores
@@ -169,27 +174,27 @@ sr19:   push ax         ; Save for restoring in near future
         and al,7
         cmp al,6        ; King eaten?
         jne sr20
-        cmp sp,stack-(5+8+5)*2  ; If not in first response...
+        cmp sp,stack-(4+8+4)*2  ; If not in first response...
         mov bp,78       ; ...maximum score
         jne sr26
         add bp,bp       ; Maximum score (probably checkmate/stalemate)
 sr26:   add sp,6        ; Ignore values
-        pop cx          ; Restore side
         ret
 
 sr20:   xlat
         cbw
-;        cmp sp,stack-(5+8+5+8+5+8+5+8+5)*2  ; 4-ply depth
-        cmp sp,stack-(5+8+5+8+5+8+5)*2  ; 3-ply depth
-;        cmp sp,stack-(5+8+5+8+5)*2  ; 2-ply depth
-;        cmp sp,stack-(5+8+5)*2  ; 1-ply depth
+;        cmp sp,stack-(4+8+4+8+4+8+4+8+4)*2  ; 4-ply depth
+        cmp sp,stack-(4+8+4+8+4+8+4)*2  ; 3-ply depth
+;        cmp sp,stack-(4+8+4+8+4)*2  ; 2-ply depth
+;        cmp sp,stack-(4+8+4)*2  ; 1-ply depth
         jbe sr22
-        pusha
+        pusha           ; Save all state (including current side in ch)
         call sr28       ; Do move
+        xor ch,8        ; Change side
         call play
         mov bx,sp
         sub [bx+14],bp  ; Substract BP from AX
-        popa
+        popa            ; Save all state (including current side in ch)
 sr22:   cmp bp,ax       ; Better score?
         jg sr23         ; No, jump
         xchg ax,bp      ; New best score
@@ -238,15 +243,14 @@ sr5:    call display
         ; Read algebraic coordinate
 key2:   call key        ; Read letter
         add ax,board+127 ; Calculate board column
-        push ax
+        xchg ax,di
         call key        ; Read digit
-        pop di
         shl al,4        ; Substract digit row multiplied by 16
         sub di,ax
         ret
 key:
         mov ah,0        ; Read keyboard
-        int 0x16        ; Call BIOS
+        int 0x16        ; Call BIOS, only affects AX and Flags
 display:
         pusha
         mov ah,0x0e     ; Console output
@@ -277,11 +281,11 @@ displacement:
 board:  equ 0x0300
 stack:  equ 0x0500
     %else
-        ; 78 bytes to say something
+        ; 84 bytes to say something
         db "Toledo Atomchess Oct/23/2015"
-        db " (c) 2015 Oscar Toledo G. "
+        db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
-        db " :-)  "
+        db " Enjoy it! :)"
         db 0
 
         ;
