@@ -151,7 +151,7 @@ sr25:   dec si
         and dl,0x0c
         mov bx,offsets-4
         xlatb
-        add al,displacement&255
+        add al,displacement
         mov dh,al       ; Movements offset in dh
 sr12:   mov di,si       ; Restart target square
 sr9:    mov bl,dh       ; Build index into directions
@@ -163,7 +163,7 @@ sr9:    mov bl,dh       ; Build index into directions
         mov ah,[di]
         or ah,ah        ; Empty square?
         jz sr10
-        cmp dh,(16+displacement)&255 ; Pawn?
+        cmp dh,16+displacement       ; Pawn?
         jc sr27
         sar cl,1        ; Straight? (cl can be modified because only used once)
         jnc sr17        ; Yes, avoid and cancels any double square movement
@@ -174,7 +174,7 @@ sr27:   xor ah,ch
         jnc sr18        ; No, avoid
 
 sr19:   push ax         ; Save for restoring in near future
-        mov bl,scores&255
+        mov bl,scores
         mov al,ah
         and al,7
         cmp al,6        ; King eaten?
@@ -223,7 +223,7 @@ sr18:   dec ax
         jz sr9          ; Yes, follow line of squares
 sr16:   jmp sr14
 
-sr10:   cmp dh,(16+displacement)&255 ; Pawn?
+sr10:   cmp dh,16+displacement       ; Pawn?
         jc sr19
         sar cl,1        ; Diagonal? (cl can be modified because only used once)
         jc sr18         ; Yes, avoid
