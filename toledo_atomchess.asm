@@ -17,6 +17,8 @@
         ; Revision: Oct/23/2015 19:52 local time.
         ;   Integrated Peter Ferrie suggestions: moved subroutines
         ;   and changed 16-bit load to 8-bit for 4 bytes.
+        ; Revision: Oct/23/2015 20:31 local time.
+        ;   Constants reduced on my own for other 2 bytes.
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -25,7 +27,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 434 bytes size (runs in a boot sector) or 428 bytes (COM file)
+        ; * 432 bytes size (runs in a boot sector) or 426 bytes (COM file)
 
         use16
 
@@ -106,7 +108,7 @@ sr6:    cmp si,board+120
         pop cx
         cmp sp,stack-2
         jne sr24
-        cmp bp,-16384   ; Illegal move? (always in check)
+        cmp bp,-127     ; Illegal move? (always in check)
         jl sr24         ; Yes, doesn't move
 sr28:   movsb           ; Do move
         mov byte [si-1],0       ; Clear origin square
@@ -115,7 +117,7 @@ sr24:   ret
         ;
         ; Computer plays :)
         ;
-play:   mov bp,-32768   ; Current score
+play:   mov bp,-256     ; Current score
         push cx         ; Current side
         push bp         ; Origin square
         push bp         ; Target square
@@ -167,10 +169,10 @@ sr19:   push ax         ; Save for restoring in near future
         and al,7
         cmp al,6        ; King eaten?
         jne sr20
-        cmp sp,stack-(5+8+5)*2  ; If in first response...
-        mov bp,20000    ; ...maximum score (probably checkmate/slatemate)
-        je sr26
-        mov bp,7811     ; Maximum score
+        cmp sp,stack-(5+8+5)*2  ; If not in first response...
+        mov bp,78       ; ...maximum score
+        jne sr26
+        add bp,bp       ; Maximum score (probably checkmate/stalemate)
 sr26:   add sp,6        ; Ignore values
         pop cx          ; Restore side
         ret
@@ -257,7 +259,7 @@ display:
 initial:
         db 2,5,3,4,6,3,5,2
 scores:
-        db 0,10,50,30,90,30
+        db 0,1,5,3,9,3
 
 chars:
         db ".prbqnk",0x0d,".PRBQNK"
@@ -275,11 +277,11 @@ displacement:
 board:  equ 0x0300
 stack:  equ 0x0500
     %else
-        ; 76 bytes to say something
+        ; 78 bytes to say something
         db "Toledo Atomchess Oct/23/2015"
         db " (c) 2015 Oscar Toledo G. "
         db "www.nanochess.org"
-        db " :-)"
+        db " :-)  "
         db 0
 
         ;
