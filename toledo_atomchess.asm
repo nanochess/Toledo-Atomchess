@@ -27,6 +27,9 @@
         ; Revision: Oct/23/2015 21:09 Solved bug where computer pawn could
         ;   "jump" over own pawn. Saved two bytes more reusing ch as zero
         ;   before first "call play"
+        ; Revision: Oct/24/2015 10:09 local time.
+        ;   Reduced another 6 bytes redesigning the next target square
+        ;   calculation.
      
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -35,7 +38,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 426 bytes size (runs in a boot sector) or 420 bytes (COM file)
+        ; * 420 bytes size (runs in a boot sector) or 414 bytes (COM file)
 
         use16
 
@@ -149,11 +152,11 @@ sr25:   dec si
         add al,displacement
         mov dh,al       ; Movements offset in dh
 sr12:   mov di,si       ; Restart target square
-        mov bl,dh       ; Build index into directions
-        mov cl,[bx]     ; Direction in cl
-sr9:    add di,cx       ; Calculate target square for piece
-        and di,0xff
-        or di,board
+sr9:    mov bl,dh       ; Build index into directions
+        xchg ax,di
+        add al,[bx]     ; Next target square
+        xchg ax,di
+        mov cl,[bx]     ; For pawn direction checking
         mov al,[si]     ; Content of: origin in al, target in ah
         mov ah,[di]
         or ah,ah        ; Empty square?
@@ -281,11 +284,11 @@ displacement:
 board:  equ 0x0300
 stack:  equ 0x0500
     %else
-        ; 84 bytes to say something
+        ; 90 bytes to say something
         db "Toledo Atomchess Oct/23/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
-        db " Enjoy it! :)"
+        db " Happy coding! :-) "
         db 0
 
         ;
@@ -294,8 +297,8 @@ stack:  equ 0x0500
 
         db 0x55,0xaa
 
-board:  equ $
+board:  equ $7e00
 
-stack:  equ $+512
+stack:  equ $8000
     %endif
 
