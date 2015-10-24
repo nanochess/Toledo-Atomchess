@@ -39,7 +39,7 @@
 
         use16
 
-        ; Note careful         ; Edit this to 0 for a bootable sector
+        ; Edit this to 0 for a bootable sector
         ; Edit this to 1 for a COM file
     %ifndef com_file
 com_file:       equ 0
