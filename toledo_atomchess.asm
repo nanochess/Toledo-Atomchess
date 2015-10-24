@@ -14,6 +14,9 @@
         ; Revision: Oct/10/2015 08:21 local time. More optimization.
         ; Revision: Oct/22/2015 16:59 local time. Now in nasm syntax and uses LEA per HellMood suggestion, 1 byte saved. Relocated sr20 per suggestion of Peter Ferrie (qkumba), saves 2 bytes.
         ; Revision: Oct/23/2015 10:49 local time. Replaced TEST CL,1 with SAL CL,1, and changed AND CL,0x1f CMP CL,0x10 with CMP DL,2. 5 bytes saved.
+        ; Revision: Oct/23/2015 19:52 local time.
+        ;   Integrated Peter Ferrie suggestions: moved subroutines
+        ;   and changed 16-bit load to 8-bit for 4 bytes.
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -22,7 +25,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 438 bytes size (runs in a boot sector) or 432 bytes (COM file)
+        ; * 434 bytes size (runs in a boot sector) or 428 bytes (COM file)
 
         use16
 
@@ -87,42 +90,6 @@ sr21:   call display_board
         call play
         jmp short sr21
 
-sr20:   xlat
-        cbw
-;        cmp sp,stack-(5+8+5+8+5+8+5+8+5)*2  ; 4-ply depth
-        cmp sp,stack-(5+8+5+8+5+8+5)*2  ; 3-ply depth
-;        cmp sp,stack-(5+8+5+8+5)*2  ; 2-ply depth
-;        cmp sp,stack-(5+8+5)*2  ; 1-ply depth
-        jbe sr22
-        pusha
-        call sr28       ; Do move
-        call play
-        mov bx,sp
-        sub [bx+14],bp  ; Substract BP from AX
-        popa
-sr22:   cmp bp,ax       ; Better score?
-        jg sr23         ; No, jump
-        xchg ax,bp      ; New best score
-        jne sr23        ; Same score?
-        in al,(0x40)
-        cmp al,0xaa     ; Randomize it
-sr23:   pop ax          ; Restore board
-        mov [si],al
-        mov [di],ah
-        jg sr18
-        add sp,4
-        push si         ; Save movement
-        push di
-
-sr18:   dec ax
-        and al,0x07     ; Was it pawn?
-        jz sr11         ; Yes, check special
-        cmp al,0x04     ; Knight or king?
-        jnc sr14        ; End sequence, choose next movement
-        or ah,ah        ; To empty square?
-        jz sr9          ; Yes, follow line of squares
-sr16:   jmp short sr14
-
 sr11:   cmp dl,2        ; Advanced it first square?
         jnz sr14
         lea ax,[si-0x20] ; Already checked for move to empty square
@@ -170,7 +137,7 @@ sr25:   dec si
         add al,0x04
         mov dl,al       ; Total movements of piece in dl
         and dl,0x0c
-        mov bx,offsets-4
+        mov bl,offsets-4
         xlat
         add al,displacement
         mov dh,al       ; Movements offset in dh
@@ -193,12 +160,6 @@ sr9:    add di,cx       ; Calculate target square for piece
         jc sr19
         sar cl,1        ; Straight? (cl can be modified because only used once)
         jnc sr17        ; Yes, avoid and cancels any double square movement
-        jmp short sr19
-
-sr10:   cmp dh,16+displacement       ; Pawn?
-        jc sr19
-        sar cl,1        ; Diagonal? (cl can be modified because only used once)
-        jc sr18         ; Yes, avoid
 
 sr19:   push ax         ; Save for restoring in near future
         mov bl,scores
@@ -214,12 +175,54 @@ sr26:   add sp,6        ; Ignore values
         pop cx          ; Restore side
         ret
 
+sr20:   xlat
+        cbw
+;        cmp sp,stack-(5+8+5+8+5+8+5+8+5)*2  ; 4-ply depth
+        cmp sp,stack-(5+8+5+8+5+8+5)*2  ; 3-ply depth
+;        cmp sp,stack-(5+8+5+8+5)*2  ; 2-ply depth
+;        cmp sp,stack-(5+8+5)*2  ; 1-ply depth
+        jbe sr22
+        pusha
+        call sr28       ; Do move
+        call play
+        mov bx,sp
+        sub [bx+14],bp  ; Substract BP from AX
+        popa
+sr22:   cmp bp,ax       ; Better score?
+        jg sr23         ; No, jump
+        xchg ax,bp      ; New best score
+        jne sr23        ; Same score?
+        in al,(0x40)
+        cmp al,0xaa     ; Randomize it
+sr23:   pop ax          ; Restore board
+        mov [si],al
+        mov [di],ah
+        jg sr18
+        add sp,4
+        push si         ; Save movement
+        push di
+
+sr18:   dec ax
+        and al,0x07     ; Was it pawn?
+        jz sr11         ; Yes, check special
+        cmp al,0x04     ; Knight or king?
+        jnc sr16        ; End sequence, choose next movement
+        or ah,ah        ; To empty square?
+        jz sr9          ; Yes, follow line of squares
+sr16:   jmp sr14
+
+sr10:   cmp dh,16+displacement       ; Pawn?
+        jc sr19
+        sar cl,1        ; Diagonal? (cl can be modified because only used once)
+        jc sr18         ; Yes, avoid
+        jmp short sr19
+
         ; Display board
 display_board:
         mov si,board-8
         mov cx,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
 sr4:    lodsb
-        mov bx,chars
+        mov bx,chars    ; Note BH is reused outside this subroutine
         xlat
         cmp al,0x0d     ; Is it RC?
         jnz sr5         ; No, jump
@@ -272,10 +275,11 @@ displacement:
 board:  equ 0x0300
 stack:  equ 0x0500
     %else
-        ; 72 bytes to say something
+        ; 76 bytes to say something
         db "Toledo Atomchess Oct/23/2015"
         db " (c) 2015 Oscar Toledo G. "
         db "www.nanochess.org"
+        db " :-)"
         db 0
 
         ;
