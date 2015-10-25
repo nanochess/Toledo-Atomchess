@@ -30,6 +30,8 @@
         ; Revision: Oct/24/2015 10:09 local time.
         ;   Reduced another 6 bytes redesigning the next target square
         ;   calculation.
+        ; Revision: Oct/24/2015 11:28 local time.
+        ;   Reduced another 2 bytes using preserved register
      
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -38,7 +40,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 420 bytes size (runs in a boot sector) or 414 bytes (COM file)
+        ; * 418 bytes size (runs in a boot sector) or 412 bytes (COM file)
 
         use16
 
@@ -147,8 +149,8 @@ sr25:   dec si
         add al,0x04
         mov dl,al       ; Total movements of piece in dl
         and dl,0x0c
-        mov bl,offsets-4
-        xlat
+        mov bx,offsets-4
+        xlatb
         add al,displacement
         mov dh,al       ; Movements offset in dh
 sr12:   mov di,si       ; Restart target square
@@ -184,7 +186,7 @@ sr19:   push ax         ; Save for restoring in near future
 sr26:   add sp,6        ; Ignore values
         ret
 
-sr20:   xlat
+sr20:   xlatb
         cbw
 ;        cmp sp,stack-(4+8+4+8+4+8+4+8+4)*2  ; 4-ply depth
         cmp sp,stack-(4+8+4+8+4+8+4)*2  ; 3-ply depth
@@ -232,8 +234,8 @@ display_board:
         mov si,board-8
         mov cx,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
 sr4:    lodsb
-        mov bx,chars    ; Note BH is reused outside this subroutine
-        xlat
+        mov bx,chars
+        xlatb
         cmp al,0x0d     ; Is it RC?
         jnz sr5         ; No, jump
         add si,7        ; Jump 7 frontier bytes
@@ -255,12 +257,10 @@ key:
         mov ah,0        ; Read keyboard
         int 0x16        ; Call BIOS, only affects AX and Flags
 display:
-        pusha
         mov ah,0x0e     ; Console output
         mov bh,0x00
         int 0x10        ; Call BIOS
-        popa
-        and ax,0x0f
+        and al,0x0f
         ret
 
 initial:
@@ -284,12 +284,12 @@ displacement:
 board:  equ 0x0300
 stack:  equ 0x0500
     %else
-        ; 90 bytes to say something
+        ; 92 bytes to say something
         db "Toledo Atomchess Oct/23/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
-        db 0
+        db 0,0,0
 
         ;
         ; This marker is required for BIOS to boot floppy disk
