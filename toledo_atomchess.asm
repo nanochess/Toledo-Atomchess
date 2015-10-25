@@ -30,7 +30,11 @@
         ; Revision: Oct/24/2015 10:09 local time.
         ;   Reduced another 6 bytes redesigning the next target square
         ;   calculation.
-     
+        ; Revision: Oct/24/2015 18:21 local time.
+        ;   Changed xlat to xlatb for yasm compatibility. (Peter Ferrie)
+        ;   CL now used for current ply depth, removes ugly SP code so now MOV SP removed for COM file (Oscar Toledo)
+        ;   Integrated offset of movement in table.
+
         ; Features:
         ; * Computer plays legal basic chess movements ;)
         ; * Enter moves as algebraic form (D2D4) (note your moves aren't validated)
@@ -38,7 +42,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 420 bytes size (runs in a boot sector) or 414 bytes (COM file)
+        ; * 414 bytes size (runs in a boot sector) or 405 bytes (COM file)
 
         use16
 
@@ -57,11 +61,11 @@ com_file:       equ 0
         ; Note careful use of side-effects along all code.
 
         ; Housekeeping
-        mov sp,stack
         cld
     %if com_file
-        ; Saves six bytes in COM file because of preset environment ;)
+        ; Saves 9 bytes in COM file because of preset environment ;)
     %else
+        mov sp,stack
         push cs
         push cs
         push cs
@@ -117,7 +121,7 @@ sr6:    cmp si,board+120
         jne sr7
         pop di
         pop si
-        cmp sp,stack-2
+        test cl,cl      ; Top call?
         jne sr24
         cmp bp,-127     ; Illegal move? (always in check)
         jl sr24         ; Yes, doesn't move
@@ -148,23 +152,21 @@ sr25:   dec si
         mov dl,al       ; Total movements of piece in dl
         and dl,0x0c
         mov bl,offsets-4
-        xlat
-        add al,displacement
+        xlatb
         mov dh,al       ; Movements offset in dh
 sr12:   mov di,si       ; Restart target square
 sr9:    mov bl,dh       ; Build index into directions
         xchg ax,di
         add al,[bx]     ; Next target square
         xchg ax,di
-        mov cl,[bx]     ; For pawn direction checking
         mov al,[si]     ; Content of: origin in al, target in ah
         mov ah,[di]
         or ah,ah        ; Empty square?
         jz sr10
         cmp dh,16+displacement       ; Pawn?
         jc sr27
-        sar cl,1        ; Straight? (cl can be modified because only used once)
-        jnc sr17        ; Yes, avoid and cancels any double square movement
+        cmp dl,3        ; Straight? 
+        jb sr17         ; Yes, avoid and cancels any double square movement
 sr27:   xor ah,ch
         sub ah,0x09     ; Valid capture?
         cmp ah,0x06
@@ -177,23 +179,24 @@ sr19:   push ax         ; Save for restoring in near future
         and al,7
         cmp al,6        ; King eaten?
         jne sr20
-        cmp sp,stack-(4+8+4)*2  ; If not in first response...
+        dec cl          ; If not in first response...
         mov bp,78       ; ...maximum score
         jne sr26
         add bp,bp       ; Maximum score (probably checkmate/stalemate)
 sr26:   add sp,6        ; Ignore values
         ret
 
-sr20:   xlat
+sr20:   xlatb
         cbw
-;        cmp sp,stack-(4+8+4+8+4+8+4+8+4)*2  ; 4-ply depth
-        cmp sp,stack-(4+8+4+8+4+8+4)*2  ; 3-ply depth
-;        cmp sp,stack-(4+8+4+8+4)*2  ; 2-ply depth
-;        cmp sp,stack-(4+8+4)*2  ; 1-ply depth
-        jbe sr22
+;        cmp cl,4  ; 4-ply depth
+        cmp cl,3  ; 3-ply depth
+;        cmp cl,2  ; 2-ply depth
+;        cmp cl,1  ; 1-ply depth
+        jnc sr22
         pusha           ; Save all state (including current side in ch)
         call sr28       ; Do move
         xor ch,8        ; Change side
+        inc cx          ; Increase depth
         call play
         mov bx,sp
         sub [bx+14],bp  ; Substract BP from AX
@@ -223,8 +226,8 @@ sr16:   jmp sr14
 
 sr10:   cmp dh,16+displacement       ; Pawn?
         jc sr19
-        sar cl,1        ; Diagonal? (cl can be modified because only used once)
-        jc sr18         ; Yes, avoid
+        cmp dl,3        ; Diagonal? 
+        jnc sr18        ; Yes, avoid
         jmp short sr19
 
         ; Display board
@@ -233,7 +236,7 @@ display_board:
         mov cx,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
 sr4:    lodsb
         mov bx,chars    ; Note BH is reused outside this subroutine
-        xlat
+        xlatb
         cmp al,0x0d     ; Is it RC?
         jnz sr5         ; No, jump
         add si,7        ; Jump 7 frontier bytes
@@ -251,16 +254,17 @@ key2:   call key        ; Read letter
         shl al,4        ; Substract digit row multiplied by 16
         sub di,ax
         ret
-key:
-        mov ah,0        ; Read keyboard
+
+        ; Read a key and display it
+key:    mov ah,0        ; Read keyboard
         int 0x16        ; Call BIOS, only affects AX and Flags
 display:
         pusha
         mov ah,0x0e     ; Console output
         mov bh,0x00
-        int 0x10        ; Call BIOS
+        int 0x10        ; Call BIOS, can affect AX in older VGA BIOS.
         popa
-        and ax,0x0f
+        and ax,0x0f     ; Extract column
         ret
 
 initial:
@@ -272,7 +276,13 @@ chars:
         db ".prbqnk",0x0d,".PRBQNK"
 
 offsets:
-        db 16,20,8,12,8,0,8
+        db 16+displacement
+        db 20+displacement
+        db 8+displacement
+        db 12+displacement
+        db 8+displacement
+        db 0+displacement
+        db 8+displacement
 displacement:
         db -33,-31,-18,-14,14,18,31,33
         db -16,16,-1,1
@@ -282,14 +292,13 @@ displacement:
 
     %if com_file
 board:  equ 0x0300
-stack:  equ 0x0500
     %else
-        ; 90 bytes to say something
-        db "Toledo Atomchess Oct/23/2015"
+        ; 96 bytes to say something
+        db "Toledo Atomchess Oct/24/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
-        db 0
+        db 0,0,0,0,0,0,0
 
         ;
         ; This marker is required for BIOS to boot floppy disk
