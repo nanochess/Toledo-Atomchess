@@ -34,6 +34,8 @@
         ;   Changed xlat to xlatb for yasm compatibility. (Peter Ferrie)
         ;   CL now used for current ply depth, removes ugly SP code so now MOV SP removed for COM file (Oscar Toledo)
         ;   Integrated offset of movement in table.
+        ; Revision: Oct/25/2015 11:07 local time.
+        ;   Reduced another 1 byte by reordering registers to enable XCHG. (Peter Ferrie)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -108,13 +110,13 @@ sr21:   call display_board
         call play       ; ch = 8=White, 0=Black
         jmp short sr21
 
-sr11:   cmp dl,2        ; Advanced it first square?
+sr11:   cmp dh,2        ; Advanced it first square?
         jnz sr14
         lea ax,[si-0x20] ; Already checked for move to empty square
         cmp al,0x40     ; At top or bottom firstmost row?
         jb sr17         ; No, cancel double-square movement
-sr14:   inc dh
-        dec dl
+sr14:   inc dl
+        dec dh
         jnz sr12
 sr17:   inc si
 sr6:    cmp si,board+120
@@ -149,13 +151,13 @@ sr7:    lodsb           ; Read square
 sr8:    inc ax
 sr25:   dec si
         add al,0x04
-        mov dl,al       ; Total movements of piece in dl
-        and dl,0x0c
+        mov ah,al       ; Total movements of piece in ah (later dh)
+        and ah,0x0c
         mov bl,offsets-4
         xlatb
-        mov dh,al       ; Movements offset in dh
+        xchg dx,ax      ; Movements offset in dl
 sr12:   mov di,si       ; Restart target square
-sr9:    mov bl,dh       ; Build index into directions
+sr9:    mov bl,dl       ; Build index into directions
         xchg ax,di
         add al,[bx]     ; Next target square
         xchg ax,di
@@ -163,9 +165,9 @@ sr9:    mov bl,dh       ; Build index into directions
         mov ah,[di]
         or ah,ah        ; Empty square?
         jz sr10
-        cmp dh,16+displacement       ; Pawn?
+        cmp dl,16+displacement       ; Pawn?
         jc sr27
-        cmp dl,3        ; Straight? 
+        cmp dh,3        ; Straight? 
         jb sr17         ; Yes, avoid and cancels any double square movement
 sr27:   xor ah,ch
         sub ah,0x09     ; Valid capture?
@@ -224,9 +226,9 @@ sr18:   dec ax
         jz sr9          ; Yes, follow line of squares
 sr16:   jmp sr14
 
-sr10:   cmp dh,16+displacement       ; Pawn?
+sr10:   cmp dl,16+displacement       ; Pawn?
         jc sr19
-        cmp dl,3        ; Diagonal? 
+        cmp dh,3        ; Diagonal? 
         jnc sr18        ; Yes, avoid
         jmp short sr19
 
@@ -293,12 +295,12 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 96 bytes to say something
-        db "Toledo Atomchess Oct/24/2015"
+        ; 97 bytes to say something
+        db "Toledo Atomchess Oct/25/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
-        db 0,0,0,0,0,0,0
+        db 0,0,0,0,0,0,0,0
 
         ;
         ; This marker is required for BIOS to boot floppy disk
