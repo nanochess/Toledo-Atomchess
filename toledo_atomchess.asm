@@ -38,6 +38,8 @@
         ;   Reduced another 1 byte by reordering registers to enable XCHG. (Peter Ferrie)
         ; Revision: Oct/26/2015 12:48 local time.
         ;   Reduced 2 bytes more exchanging AH and AL in piece move code and an arithmetic trick with CH. (Oscar Toledo)
+        ; Revision: Oct/26/2015 13:44 local time.
+        ;   Reduced 3 bytes more reusing check comparison.
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -46,7 +48,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 411 bytes size (runs in a boot sector) or 402 bytes (COM file)
+        ; * 408 bytes size (runs in a boot sector) or 399 bytes (COM file)
 
         use16
 
@@ -173,22 +175,24 @@ sr9:    mov bl,dl       ; Build index into directions
         jb sr17         ; Yes, avoid and cancels any double square movement
 sr27:   xor al,ch
         sub al,0x09     ; Valid capture?
-        cmp al,0x06
+        cmp al,0x05     ; Check Z with king, C=0 for higher (invalid)
         mov al,[di]
-        jnc sr18        ; No, avoid
+        ja sr18         ; No, avoid
 
-sr19:   push ax         ; Save for restoring in near future
-        and al,7
-        cmp al,6        ; King eaten?
-        jne sr20
+        ; Comes from sr10 with z=0
+        ; Comes from sr27 with z=0/1 if king captured
+sr19:   jne sr20        ; Wizard trick, jump if not captured king
         dec cl          ; If not in first response...
         mov bp,78       ; ...maximum score
         jne sr26
         add bp,bp       ; Maximum score (probably checkmate/stalemate)
-sr26:   add sp,6        ; Ignore values
+sr26:   pop ax          ; Ignore values
+        pop ax
         ret
 
-sr20:   mov bl,scores
+sr20:   push ax         ; Save for restoring in near future
+        and al,7
+        mov bl,scores
         xlatb
         cbw
 ;        cmp cl,4  ; 4-ply depth
@@ -296,12 +300,13 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 99 bytes to say something
-        db "Toledo Atomchess Oct/25/2015"
+        ; 102 bytes to say something
+        db "Toledo Atomchess Oct/26/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
-        db 0,0,0,0,0,0,0,0,0,0
+        db 0,0,0,0,0,0,0,0
+        db 0,0,0,0,0
 
         ;
         ; This marker is required for BIOS to boot floppy disk
