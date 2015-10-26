@@ -44,7 +44,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 414 bytes size (runs in a boot sector) or 405 bytes (COM file)
+        ; * 413 bytes size (runs in a boot sector) or 404 bytes (COM file)
 
         use16
 
