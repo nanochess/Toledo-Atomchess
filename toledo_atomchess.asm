@@ -36,6 +36,8 @@
         ;   Integrated offset of movement in table.
         ; Revision: Oct/25/2015 11:07 local time.
         ;   Reduced another 1 byte by reordering registers to enable XCHG. (Peter Ferrie)
+        ; Revision: Oct/26/2015 12:48 local time.
+        ;   Reduced 2 bytes more exchanging AH and AL in piece move code and an arithmetic trick with CH. (Oscar Toledo)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -44,7 +46,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 413 bytes size (runs in a boot sector) or 404 bytes (COM file)
+        ; * 411 bytes size (runs in a boot sector) or 402 bytes (COM file)
 
         use16
 
@@ -106,7 +108,7 @@ sr21:   call display_board
         call key2
         pop si
         call sr28
-        call display_board ; ch returned as zero to signal current side
+        call display_board ; returns cx to zero
         call play       ; ch = 8=White, 0=Black
         jmp short sr21
 
@@ -161,23 +163,21 @@ sr9:    mov bl,dl       ; Build index into directions
         xchg ax,di
         add al,[bx]     ; Next target square
         xchg ax,di
-        mov al,[si]     ; Content of: origin in al, target in ah
-        mov ah,[di]
-        or ah,ah        ; Empty square?
+        mov ah,[si]     ; Content of: origin in ah, target in al
+        mov al,[di]
+        or al,al        ; Goes to empty square?
         jz sr10
         cmp dl,16+displacement       ; Pawn?
         jc sr27
         cmp dh,3        ; Straight? 
         jb sr17         ; Yes, avoid and cancels any double square movement
-sr27:   xor ah,ch
-        sub ah,0x09     ; Valid capture?
-        cmp ah,0x06
-        mov ah,[di]
+sr27:   xor al,ch
+        sub al,0x09     ; Valid capture?
+        cmp al,0x06
+        mov al,[di]
         jnc sr18        ; No, avoid
 
 sr19:   push ax         ; Save for restoring in near future
-        mov bl,scores
-        mov al,ah
         and al,7
         cmp al,6        ; King eaten?
         jne sr20
@@ -188,7 +188,8 @@ sr19:   push ax         ; Save for restoring in near future
 sr26:   add sp,6        ; Ignore values
         ret
 
-sr20:   xlatb
+sr20:   mov bl,scores
+        xlatb
         cbw
 ;        cmp cl,4  ; 4-ply depth
         cmp cl,3  ; 3-ply depth
@@ -210,19 +211,19 @@ sr22:   cmp bp,ax       ; Better score?
         in al,(0x40)
         cmp al,0xaa     ; Randomize it
 sr23:   pop ax          ; Restore board
-        mov [si],al
-        mov [di],ah
+        mov [si],ah
+        mov [di],al
         jg sr18
         add sp,4
         push si         ; Save movement
         push di
 
-sr18:   dec ax
-        and al,0x07     ; Was it pawn?
+sr18:   dec ah
+        xor ah,ch       ; Was it pawn?
         jz sr11         ; Yes, check special
-        cmp al,0x04     ; Knight or king?
+        cmp ah,0x04     ; Knight or king?
         jnc sr16        ; End sequence, choose next movement
-        or ah,ah        ; To empty square?
+        or al,al        ; To empty square?
         jz sr9          ; Yes, follow line of squares
 sr16:   jmp sr14
 
@@ -246,7 +247,7 @@ sr4:    lodsb
         mov al,0x0a     ; Now display LF
 sr5:    call display
         loop sr4
-        ret
+        ret             ; cx=0
 
         ; Read algebraic coordinate
 key2:   call key        ; Read letter
@@ -295,12 +296,12 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 97 bytes to say something
+        ; 99 bytes to say something
         db "Toledo Atomchess Oct/25/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
-        db 0,0,0,0,0,0,0,0
+        db 0,0,0,0,0,0,0,0,0,0
 
         ;
         ; This marker is required for BIOS to boot floppy disk
