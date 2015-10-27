@@ -12,41 +12,53 @@
         ;                        to queen, en passant and castling.
         ; Revision: 04-jun-2015. At last fully debugged.
         ; Revision: 06-oct-2015. Optimized board initialization/display and other tiny bits.
+        ; Revision: 26-oct-2015 18:35 local time.
+        ;   Passed some optimization from basic Atomchess.
 
         ; Features:
         ; * Full chess movements (except promotion only to queen)
         ; * Enter moves as algebraic form (D2D4) (your moves are validated)
         ; * Search depth of 3-ply
-        ; * 812 bytes size (fits in two boot sectors)
-
-        ; Note: I'm lazy enough to write my own assembler instead of
-        ;       searching for one, so you will have to excuse my syntax ;)
-
+        ; * 779 bytes size (bootable disk) or 754 bytes (COM file)
+     
         use16
 
-        ; Search for "REPLACE" to find changes for COM file
-        org 0x7c00       ; REPLACE with ORG 0x0100
+        ; Edit this to 0 for a bootable sector
+        ; Edit this to 1 for a COM file
+    %ifndef com_file
+com_file:       equ 0
+    %endif
+
+    %if com_file
+        org 0x0100
+    %else
+        org 0x7c00
+    %endif
 
         ; Housekeeping
-        mov sp,stack
         cld
-        push cs
-        push cs
-        push cs
-        pop ds
-        pop es
-        pop ss
+        mov sp,stack
+    %if com_file
+        ; Saves 25 bytes in COM file because of preset environment ;)
+    %else
+        push cs         ; 1
+        push cs         ; 2
+        push cs         ; 3
+        pop ds          ; 4
+        pop es          ; 5
+        pop ss          ; 6
         ; Load second sector
-sr0:    push ds
-        push es
-        mov ax,0x0201
-        mov bx,0x7e00
-        mov cx,0x0002
-        xor dx,dx
-        int 0x13         ; REPLACE with NOP NOP
-        pop es
-        pop ds
-        jb sr0
+sr0:    push ds         ; 7
+        push es         ; 8
+        mov ax,0x0201   ; 11
+        mov bx,0x7e00   ; 14
+        mov cx,0x0002   ; 17
+        xor dx,dx       ; 19
+        int 0x13        ; 21
+        pop es          ; 22
+        pop ds          ; 23
+        jb sr0          ; 25
+    %endif
         ; Create board
         mov di,board-8
         mov cx,0x0108
@@ -78,12 +90,12 @@ sr21:   call display_board
         push di
         call key2
         pop si
-        mov ch,0x00      ; Current turn (0=White, 8=Black)
+        mov ch,0x08     ; Current turn (8=White, 0=Black)
         call play_validate
-        test ch,ch      ; Changed turn?
-        je sr21         ; No, wasn't valid
+        cmp bp,-127     ; Valid score?
+        jl sr21         ; No, wasn't valid
         call display_board
-        mov ch,0x08      ; Current turn (0=White, 8=Black)
+        mov ch,0x00     ; Current turn (8=White, 0=Black)
         dec byte [legal]
         mov word [depth],stack-(4+8+4+8+4+8+4)*2
         call play
@@ -100,13 +112,11 @@ play:   mov bp,-32768   ; Current score
         push si         ; Origin square
         push di         ; Target square
 
-        xor ch,8        ; Change side
-
         mov si,board
 sr7:    lodsb           ; Read square
         xor al,ch       ; XOR with current playing side
-        and al,0x0f      ; Remove moved bit
-        dec ax          ; Translate to 0-5
+        and al,0x0f     ; Remove moved bit
+        dec ax          ; Translate to 0-5 (255=empty)
         cmp al,6        ; Is it frontier or empty square?
         jnc sr6         ; Yes, jump
         or al,al        ; Is it pawn?
@@ -115,45 +125,39 @@ sr7:    lodsb           ; Read square
         jnz sr25        ; No, jump
 sr8:    inc ax          ; Inverse direction for pawn
 sr25:   dec si
-        push ax
-        and al,0x04
         add al,0x04
-        mov dl,al       ; Total movements of piece in dl
-        pop ax
-        mov bx,offsets
-        xlat
-        mov dh,al       ; Movements offset in dh
+        mov ah,al       ; Total movements of piece in ah (later dh)
+        and ah,0x0c
+        mov bx,offsets-4
+        xlatb
+        xchg dx,ax      ; Movements offset in dl
 sr12:   mov di,si       ; Restart target square
-        mov bx,displacement
-        mov al,dh
-        xlat
-        mov cl,al       ; Current displacement offset in cl
-sr9:    add di,cx
-        and di,0xff
-        or di,board
+sr9:    mov bx,displacement
+        mov bl,dl
+        xchg ax,di
+        add al,[bx]     ; Next target square
+        xchg ax,di
         mov al,[si]     ; Content of origin square in al
         mov ah,[di]     ; Content of target square in ah
-        and ah,0x0f      ; Empty square?
+        and ah,0x0f     ; Empty square?
         jz sr10         ; Yes, jump
-        xor ah,ch
-        sub ah,0x09      ; Is it a valid capture?
+        cmp dl,16+displacement ; Moving pawn?
+        jc sr35
+        cmp dh,3        ; Straight advance?
+        jc sr17         ; Yes, avoid
+sr35:   xor ah,ch
+        sub ah,0x09     ; Is it a valid capture?
         cmp ah,0x06
         mov ah,[di]
         jnc sr18        ; No, jump to avoid
-        cmp dh,16       ; Moving pawn?
-        jc sr19
-        test cl,1       ; Straight advance?
-        je sr18         ; Yes, avoid
         jmp short sr19
 
-sr10:   cmp dh,16       ; Moving pawn?
+sr10:   cmp dl,16+displacement ; Moving pawn?
         jc sr19         ; No, jump
-        test cl,1       ; Diagonal?
-        je sr19         ; No, jump
-        mov bx,si
-        dec bx
-        test cl,2       ; Going left?
-        jne sr29
+        cmp dh,3        ; Diagonal?
+        jc sr19         ; No, jump
+        lea bx,[si-1]
+        jne sr29        ; Going right? jump
         inc bx
         inc bx
 sr29:   cmp bx,[enp]    ; Is it a valid en passant?
@@ -164,12 +168,12 @@ sr19:   push ax         ; Save origin and target square in stack
         and al,7
         cmp al,6        ; King eaten?
         jne sr20
-        cmp sp,stack-(4+8+4)*2  ; If in first response...
-        mov bp,20000    ; ...maximum score (probably checkmate/slatemate)
-        je sr26
-        mov bp,7811     ; Maximum score
+        cmp sp,stack-(4+8+4)*2  ; If not in first response...
+        mov bp,78       ; ...maximum score
+        jne sr26
+        add bp,bp       ; Maximum score (probably checkmate/stalemate)
 sr26:   add sp,6        ; Ignore values
-        jmp sr24
+        ret
 
 sr20:   mov bx,scores
         xlat
@@ -180,15 +184,15 @@ sr20:   mov bx,scores
         pusha
         mov [enp],ax    ; En passant not possible
         mov al,[si]     ; Read origin square
-        and al,0x0f      ; Clear bit 4 (marks piece moved)
-        cmp al,0x0e      ; Is it a king?
+        and al,0x0f     ; Clear bit 4 (marks piece moved)
+        cmp al,0x0e     ; Is it a king?
         je sr36
         cmp al,0x06
         jne sr37        ; No, jump
 sr36:   mov bx,si
         sub bx,di
         mov bh,ch       ; Create moved rook
-        xor bh,0x02      ;
+        xor bh,0x02     ;
         cmp bl,2        ; Is it castling to left?
         jne sr38        ; No, jump
         mov [di+1],bh   ; Put it along king
@@ -200,30 +204,31 @@ sr38:   cmp bl,-2       ; Is it castling to right?
         mov [di-1],bh   ; Put it along king
         mov [di+1],ah
 sr37:
-        cmp al,0x09      ; We have a pawn?
+        cmp al,0x09     ; We have a pawn?
         je sr31
         cmp al,0x01
         jne sr30        ; No, jump
 sr31:   mov bp,sp
         mov bx,di
-        cmp bl,0x10      ; Going to uppermost row?
+        cmp bl,0x10     ; Going to uppermost row?
         jc sr32         ; Yes, jump
-        cmp bl,0x70      ; Going to lowermost row?
+        cmp bl,0x70     ; Going to lowermost row?
         jc sr33         ; No, jump
-sr32:   xor al,0x05      ; Promote to queen
-        add word [bp+14],90     ; Add points for queen
+sr32:   xor al,0x05     ; Promote to queen
+        add word [bp+14],9      ; Add points for queen
 sr33:   sub bx,si
         call en_passant_test
         jnc sr41
         mov [bx],ah     ; Clean en passant square
-        add word [bp+14],10     ; Add points for pawn
+        inc word [bp+14]        ; Add points for pawn
         jmp sr30
 
-sr41:   and bx,0x001f    ; Moving two squares ahead?
+sr41:   and bx,0x001f   ; Moving two squares ahead?
         jne sr30        ; No, jump
         mov [enp],di    ; Take note of en passant
 sr30:   mov [di],al
         mov [si],ah     ; Clear origin square
+        xor ch,8        ; Change side
         call play
         mov bx,sp
         sub [bx+14],bp  ; Substract BP from AX
@@ -243,8 +248,9 @@ sr22:   mov [temp],ax
         jnz sr23
         cmp di,[bp+2]   ; Target is same?
         jnz sr23
-        cmp ax,-16384   ; Illegal movement?
+        cmp ax,-127     ; Illegal movement?
         jl sr23
+        xor bp,bp
         add sp,6
         ret
 
@@ -260,24 +266,44 @@ en_passant_test:
         stc             ; Set carry
         lea bx,[si-1]
         jne sr42
-        lea bx,[si+1]
+        inc bx
+        inc bx
 sr42:   ret
 
-displacement:
-        db -33,-31,-18,-14,14,18,31,33
-        db -16,16,-1,1
-        db 15,17,-15,-17
-        db -15,-17,-16,-32
-        db 15,17,16,32
+        ; Display board
+display_board:
+        mov si,board-8
+        mov cx,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
+sr4:    lodsb
+        and al,0x0f     ; Removed "moved" bit
+        mov bx,chars    ; Note BH is reused outside this subroutine
+        xlatb
+        cmp al,0x0d     ; Is it RC?
+        jnz sr5         ; No, jump
+        add si,7        ; Jump 7 frontier bytes
+        call display    ; Display RC
+        mov al,0x0a     ; Now display LF
+sr5:    call display
+        loop sr4
+        ret             ; cx=0
 
-scores:
-        db 0,10,50,30,90,30
+        ; Read algebraic coordinate
+key2:   call key        ; Read letter
+        add ax,board+127 ; Calculate board column
+        xchg ax,di
+        call key        ; Read digit
+        shl al,4        ; Substract digit row multiplied by 16
+        sub di,ax
+        ret
 
+    %if com_file
+    %else
         ;
         ; This marker is required for BIOS to boot floppy disk
         ;
-        resb 0x01fe-($-$$)      ; REPLACE with nothing for COM file
-        db 0x55,0xaa      ; REPLACE with nothing for COM file
+        resb 0x01fe-($-$$)    
+        db 0x55,0xaa     
+    %endif
 
         ; Start of second sector
 
@@ -286,8 +312,8 @@ sr28:   cmp bp,ax       ; Better score?
         xchg ax,bp      ; New best score
         jne sr27
         in al,(0x40)
-        cmp al,0x55      ; Randomize it
-        jb sr23
+        cmp al,0xaa     ; Randomize it
+        jg sr23
 sr27:   pop ax
         add sp,4
         push si         ; Save movement
@@ -300,18 +326,18 @@ sr23:   mov [enp],bx    ; Restore en passant state
         mov [di],ah
         mov bx,di
         sub bx,si
-        and al,0x07      ; Separate piece
-        cmp al,0x01      ; Is it a pawn?
+        and al,0x07     ; Separate piece
+        cmp al,0x01     ; Is it a pawn?
         jne sr43
         call en_passant_test
         jnc sr43
         mov byte [bx],ch ; Clean
         xor byte [bx],9  ; Restore opponent pawn
 
-sr43:   cmp al,0x06      ; Is it a king?
+sr43:   cmp al,0x06     ; Is it a king?
         jne sr18
         mov bh,ch       ; Create unmoved rook
-        xor bh,0x12      ;
+        xor bh,0x12     ;
         cmp bl,-2       ; Castling to left?
         jne sr40
         mov [di-2],bh
@@ -324,13 +350,13 @@ sr40:   cmp bl,2        ; Castling to right?
         mov [di-1],ah
 
 sr18:   dec ax
-        and al,0x07      ; Was it pawn?
+        and al,0x07     ; Was it pawn?
         jz sr11         ; Yes, check special
-        cmp al,0x05      ; King?
+        cmp al,0x05     ; King?
         jne sr34        ; No, jump
         test byte [si],0x10      ; King already moved?
         je sr34         ; Yes, jump
-        cmp word [temp],-4096   ; In check?
+        cmp word [temp],-40       ; In check?
         jl sr34         ; Yes, jump
         or ah,ah        ; Moved to empty square?
         jne sr34        ; No, jump
@@ -349,98 +375,85 @@ sr44:   test byte [si-3],255    ; Is empty square just right of rook?
 sr46:   test bl,bl      ; Ending in empty square?
         jne sr34        ; No, jump
         and bh,0x17
-        cmp bh,0x12      ; Unmoved rook?
+        cmp bh,0x12     ; Unmoved rook?
         je sr9          ; Yes, can move two squares for castling
 
-sr34:   cmp al,0x04      ; Knight or king?
+sr34:   cmp al,0x04     ; Knight or king?
         jnc sr14        ; End sequence, choose next movement
         or ah,ah        ; To empty square?
         jz sr9          ; Yes, follow line of squares
 sr16:   jmp short sr14
 
-sr11:   and cl,0x1f      ; Advanced it first square?
-        cmp cl,0x10
+sr11:   cmp dh,2        ; Advanced it first square?
         jnz sr14
-sr15:   or ah,ah        ; Pawn to empty square?
-        jnz sr17        ; No, cancel double-square movement
-        mov ax,si
-        sub al,0x20      ; At first top row?
-        cmp al,0x40      ; At first bottom row?
+sr15:   lea ax,[si-0x20]  ; Already checked pawn moving to empty square
+        cmp al,0x40     ; At first top row or bottom row?
         jb sr17         ; No, cancel double-square movement
-sr14:   inc dh
-        dec dl
+sr14:   inc dl
+        dec dh
         jnz sr12
 sr17:   inc si
 sr6:    cmp si,board+120
         jne sr7
         pop di
         pop si
-sr24:   xor ch,8
-        ret
+sr24:   ret
 
-        ; Display board
-display_board:
-        mov si,board-8
-        mov cx,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
-sr4:    lodsb
-        and al,0x0f
-        mov bx,chars
-        xlat
-        call display2
-sr5:    loop sr4
-        ret
-
-        ; Read algebraic coordinate
-key2:   call key        ; Read letter
-        add ax,board+127 ; Calculate board column
-        push ax
-        call key        ; Read digit
-        pop di
-        shl al,4        ; Substract digit row multiplied by 16
-        sub di,ax
-        ret
-key:
-        mov ah,0        ; Read keyboard
-        int 0x16         ; Call BIOS
-        call display
-        and ax,0x0f
-        ret
-
-display2:
-        cmp al,0x0d      ; Is it RC?
-        jnz display     ; No, jump
-        add si,7        ; Jump 7 frontier bytes
-        call display    ; Display RC
-        mov al,0x0a      ; Now display LF
+        ; Read a key and display it
+key:    mov ah,0        ; Read keyboard
+        int 0x16        ; Call BIOS, only affects AX and Flags
 display:
         pusha
-        mov ah,0x0e      ; Console output
+        mov ah,0x0e     ; Console output
         mov bh,0x00
-        int 0x10         ; Call BIOS
+        int 0x10        ; Call BIOS, can affect AX in older VGA BIOS.
         popa
+        and ax,0x0f     ; Extract column
         ret
+
+initial:
+        db 0x12,0x15,0x13,0x14,0x16,0x13,0x15,0x12
+scores:
+        db 0,1,5,3,9,3
+
+offsets:
+        db 16+displacement
+        db 20+displacement
+        db 8+displacement
+        db 12+displacement
+        db 8+displacement
+        db 0+displacement
+        db 8+displacement
+displacement:
+        db -33,-31,-18,-14,14,18,31,33
+        db -16,16,-1,1
+        db 15,17,-15,-17
+        db -17,-15,-16,-32
+        db 15,17,16,32
 
 chars:
         db ".prbqnk",0x0d,".PRBQNK"
 
-initial:
-        db 0x12,0x15,0x13,0x14,0x16,0x13,0x15,0x12
-offsets:
-        db 16,20,8,12,8,0,8
-
+    %if com_file
+board:  equ 0x0500
+depth:  equ 0x0600        ; Depth for search
+enp:    equ 0x0602        ; En passant square
+temp:   equ 0x0604        ; Working score
+legal:  equ 0x0606        ; Flag indicating legal movement validation
+stack:  equ 0x0700
+    %else
         ; Bytes to say something
         db "Toledo Atomchess reloaded"
         db " (c)2015 Oscar Toledo G. "
         db "nanochess.org"
 
-        resb 0x0400-($-$$)    
+        resb 0x0400-($-$$)  
 
-board:  resb 256
-
-depth:  resb 2            ; Depth for search
-enp:    resb 2            ; En passant square
-temp:   resb 2            ; Working score
-legal:  resb 1            ; Flag indicating legal movement validation
-        resb 249
-stack:
+board:  equ 0x8000
+depth:  equ 0x8100        ; Depth for search
+enp:    equ 0x8102        ; En passant square
+temp:   equ 0x8104        ; Working score
+legal:  equ 0x8106        ; Flag indicating legal movement validation
+stack:  equ 0x8200
+    %endif
 

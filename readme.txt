@@ -13,7 +13,7 @@ no castling and no enpassant. All this in 408 bytes bootable from
 a floppy disk or 399 bytes if using the COM file.
 
 Toledo Atomchess Reloaded allows full chess movements and
-currently sizes up to 831 bytes.
+currently sizes up to 779 bytes.
 
 Check the source code for further details.
 
