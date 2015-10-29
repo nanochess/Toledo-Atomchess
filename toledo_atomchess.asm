@@ -43,7 +43,7 @@
         ; Revision: Oct/29/2015 10:58 local time.
         ;   Reduced another 2 bytes by replacing MOV ,1 with INC; replaced ADD+SHL+SUB with IMUL+LEA. (Peter Ferrie)
         ; Revision: Oct/29/2015 13:05 local time.
-        ;   Reduced another 4 bytes by replacing allowing dummy calculation pass. (Peter Ferrie)
+        ;   Reduced another 4 bytes by allowing dummy calculation pass. (Peter Ferrie)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
