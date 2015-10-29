@@ -42,6 +42,8 @@
         ;   Reduced 3 bytes more reusing check comparison.
         ; Revision: Oct/29/2015 10:58 local time.
         ;   Reduced another 2 bytes by replacing MOV ,1 with INC; replaced ADD+SHL+SUB with IMUL+LEA. (Peter Ferrie)
+        ; Revision: Oct/29/2015 13:05 local time.
+        ;   Reduced another 4 bytes by replacing allowing dummy calculation pass. (Peter Ferrie)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -50,7 +52,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 406 bytes size (runs in a boot sector) or 397 bytes (COM file)
+        ; * 402 bytes size (runs in a boot sector) or 393 bytes (COM file)
 
         use16
 
@@ -258,10 +260,7 @@ sr5:    call display
         ; Read algebraic coordinate
 key2:   call key        ; Read letter
         xchg di,ax
-        call key        ; Read digit
-        imul bp,ax,-0x10; Calculate digit row multiplied by 16
-        lea di,[bp+di+board+127] ; Substract board column
-        ret
+                        ; Fall through to read number
 
         ; Read a key and display it
 key:    mov ah,0        ; Read keyboard
@@ -273,6 +272,8 @@ display:
         int 0x10        ; Call BIOS, can affect AX in older VGA BIOS.
         popa
         and ax,0x0f     ; Extract column
+        imul bp,ax,-0x10; Calculate digit row multiplied by 16
+        lea di,[bp+di+board+127] ; Substract board column
         ret
 
 initial:
@@ -301,13 +302,12 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 104 bytes to say something
+        ; 108 bytes to say something
         db "Toledo Atomchess Oct/29/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
-        db 0,0,0,0,0,0,0,0
-        db 0,0,0,0,0,0,0
+        db "most fun MBR ever!!"
 
         ;
         ; This marker is required for BIOS to boot floppy disk
