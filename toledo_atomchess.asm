@@ -44,6 +44,8 @@
         ;   Reduced another 2 bytes by replacing MOV ,1 with INC; replaced ADD+SHL+SUB with IMUL+LEA. (Peter Ferrie)
         ; Revision: Oct/29/2015 13:05 local time.
         ;   Reduced another 4 bytes by allowing dummy calculation pass. (Peter Ferrie)
+        ; Revision: Oct/29/2015 16:03 local time.
+        ;   Reduced 2 bytes more merging cmp dl,16+displacement (Oscar Toledo)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -52,7 +54,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 402 bytes size (runs in a boot sector) or 393 bytes (COM file)
+        ; * 400 bytes size (runs in a boot sector) or 391 bytes (COM file)
 
         use16
 
@@ -169,12 +171,13 @@ sr9:    mov bl,dl       ; Build index into directions
         xchg ax,di
         add al,[bx]     ; Next target square
         xchg ax,di
-        mov ah,[si]     ; Content of: origin in ah, target in al
-        mov al,[di]
-        or al,al        ; Goes to empty square?
-        jz sr10
-        cmp dl,16+displacement       ; Pawn?
-        jc sr27
+        mov al,[di]     ; Content of target square in al
+        inc ax
+        mov ah,[si]     ; Content of origin square in ah
+        cmp dl,16+displacement    
+        dec al          ; Check for empty square in z flag
+        jz sr10         ; Goes to empty square, jump
+        jc sr27         ; If isn't not pawn, jump
         cmp dh,3        ; Straight? 
         jb sr17         ; Yes, avoid and cancels any double square movement
 sr27:   xor al,ch
@@ -182,10 +185,8 @@ sr27:   xor al,ch
         cmp al,0x05     ; Check Z with king, C=0 for higher (invalid)
         mov al,[di]
         ja sr18         ; No, avoid
-
-        ; Comes from sr10 with z=0
-        ; Comes from sr27 with z=0/1 if king captured
-sr19:   jne sr20        ; Wizard trick, jump if not captured king
+        ; z=0/1 if king captured
+        jne sr20        ; Wizard trick, jump if not captured king
         dec cl          ; If not in first response...
         mov bp,78       ; ...maximum score
         jne sr26
@@ -235,11 +236,10 @@ sr18:   dec ah
         jz sr9          ; Yes, follow line of squares
 sr16:   jmp sr14
 
-sr10:   cmp dl,16+displacement       ; Pawn?
-        jc sr19
+sr10:   jc sr20         ; If isn't not pawn, jump,
         cmp dh,3        ; Diagonal? 
         jnc sr18        ; Yes, avoid
-        jmp short sr19
+        jmp short sr20  
 
         ; Display board
 display_board:
@@ -302,12 +302,13 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 108 bytes to say something
+        ; 110 bytes to say something
         db "Toledo Atomchess Oct/29/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
-        db "most fun MBR ever!!"
+        db "Most fun MBR ever!!"
+        db 0,0
 
         ;
         ; This marker is required for BIOS to boot floppy disk
