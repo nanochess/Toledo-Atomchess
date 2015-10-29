@@ -46,6 +46,8 @@
         ;   Reduced another 4 bytes by allowing dummy calculation pass. (Peter Ferrie)
         ; Revision: Oct/29/2015 16:03 local time.
         ;   Reduced 2 bytes more merging cmp dl,16+displacement (Oscar Toledo)
+        ; Revision: Oct/29/2015 17:03 local time.
+        ;   Saved 1 byte more redesigning pawn 2 square advance, now bootable 399 bytes (Oscar Toledo)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -54,7 +56,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 400 bytes size (runs in a boot sector) or 391 bytes (COM file)
+        ; * 399 bytes size (runs in a boot sector) or 390 bytes (COM file)
 
         use16
 
@@ -120,11 +122,6 @@ sr21:   call display_board
         call play       ; ch = 8=White, 0=Black
         jmp short sr21
 
-sr11:   cmp dh,2        ; Advanced it first square?
-        jnz sr14
-        lea ax,[si-0x20] ; Already checked for move to empty square
-        cmp al,0x40     ; At top or bottom firstmost row?
-        jb sr17         ; No, cancel double-square movement
 sr14:   inc dl
         dec dh
         jnz sr12
@@ -229,7 +226,7 @@ sr23:   pop ax          ; Restore board
 
 sr18:   dec ah
         xor ah,ch       ; Was it pawn?
-        jz sr11         ; Yes, check special
+        jz sr16         ; Yes, end sequence, choose next movement
         cmp ah,0x04     ; Knight or king?
         jnc sr16        ; End sequence, choose next movement
         or al,al        ; To empty square?
@@ -237,9 +234,17 @@ sr18:   dec ah
 sr16:   jmp sr14
 
 sr10:   jc sr20         ; If isn't not pawn, jump,
-        cmp dh,3        ; Diagonal? 
-        jnc sr18        ; Yes, avoid
-        jmp short sr20  
+        cmp dh,2        ; Diagonal? 
+        ja sr18         ; Yes, avoid
+        jnz short sr20  ; Advances one square? no, jump.
+        xchg ax,si
+        push ax
+        sub al,0x20
+        cmp al,0x40     ; Moving from center of board?
+        pop ax
+        xchg ax,si
+        sbb dh,0        ; Yes, then avoid checking for two squares
+        jmp short sr20
 
         ; Display board
 display_board:
@@ -302,13 +307,13 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 110 bytes to say something
+        ; 111 bytes to say something
         db "Toledo Atomchess Oct/29/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
         db "Most fun MBR ever!!"
-        db 0,0
+        db 0,0,0
 
         ;
         ; This marker is required for BIOS to boot floppy disk
