@@ -40,6 +40,8 @@
         ;   Reduced 2 bytes more exchanging AH and AL in piece move code and an arithmetic trick with CH. (Oscar Toledo)
         ; Revision: Oct/26/2015 13:44 local time.
         ;   Reduced 3 bytes more reusing check comparison.
+        ; Revision: Oct/29/2015 09:58 local time.
+        ;   Reduced another 1 byte by replacing MOV ,1 with INC. (Peter Ferrie)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -48,7 +50,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 408 bytes size (runs in a boot sector) or 399 bytes (COM file)
+        ; * 407 bytes size (runs in a boot sector) or 398 bytes (COM file)
 
         use16
 
@@ -97,7 +99,7 @@ sr3:    lodsb           ; Load piece
         stosb           ; Black pieces
         or al,8
         mov [di+0x6f],al ; White pieces
-        mov byte [di+0x0f],0x01 ; Black pawn
+        inc byte [di+0x0f]      ; Black pawn
         mov byte [di+0x5f],0x09 ; White pawn
         loop sr3
 
@@ -300,13 +302,13 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 102 bytes to say something
+        ; 103 bytes to say something
         db "Toledo Atomchess Oct/26/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
         db 0,0,0,0,0,0,0,0
-        db 0,0,0,0,0
+        db 0,0,0,0,0,0
 
         ;
         ; This marker is required for BIOS to boot floppy disk
