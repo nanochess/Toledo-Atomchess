@@ -48,6 +48,8 @@
         ;   Reduced 2 bytes more merging cmp dl,16+displacement (Oscar Toledo)
         ; Revision: Oct/29/2015 17:03 local time.
         ;   Saved 1 byte more redesigning pawn 2 square advance, now bootable 399 bytes (Oscar Toledo)
+        ; Revision: Nov/02/2015 21:55 local time.
+        ;   Saved 1 byte more replacing constant with register, now bootable 398 bytes (Peter Ferrie)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -56,7 +58,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 399 bytes size (runs in a boot sector) or 390 bytes (COM file)
+        ; * 398 bytes size (runs in a boot sector) or 389 bytes (COM file)
 
         use16
 
@@ -243,7 +245,7 @@ sr10:   jc sr20         ; If isn't not pawn, jump,
         cmp al,0x40     ; Moving from center of board?
         pop ax
         xchg ax,si
-        sbb dh,0        ; Yes, then avoid checking for two squares
+        sbb dh,al       ; Yes, then avoid checking for two squares
         jmp short sr20
 
         ; Display board
@@ -307,13 +309,13 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 111 bytes to say something
+        ; 112 bytes to say something
         db "Toledo Atomchess Oct/29/2015"
         db " (c)2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
         db "Most fun MBR ever!!"
-        db 0,0,0
+        db 0,0,0,0
 
         ;
         ; This marker is required for BIOS to boot floppy disk
