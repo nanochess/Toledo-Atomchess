@@ -50,6 +50,8 @@
         ;   Saved 1 byte more redesigning pawn 2 square advance, now bootable 399 bytes (Oscar Toledo)
         ; Revision: Nov/02/2015 21:55 local time.
         ;   Saved 1 byte more replacing constant with register, now bootable 398 bytes (Peter Ferrie)
+        ; Revision: Dec/29/2015 12:58 local time.
+        ;   Saved 1 byte more replacing inc dl with inc dx, now bootable 397 bytes. (Oscar Toledo)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -58,7 +60,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 398 bytes size (runs in a boot sector) or 389 bytes (COM file)
+        ; * 397 bytes size (runs in a boot sector) or 388 bytes (COM file)
 
         use16
 
@@ -124,7 +126,7 @@ sr21:   call display_board
         call play       ; ch = 8=White, 0=Black
         jmp short sr21
 
-sr14:   inc dl
+sr14:   inc dx          ; Shorter than inc dl and because doesn't overflow
         dec dh
         jnz sr12
 sr17:   inc si
@@ -309,9 +311,9 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 112 bytes to say something
-        db "Toledo Atomchess Oct/29/2015"
-        db " (c)2015 Oscar Toledo G. "
+        ; 113 bytes to say something
+        db "Toledo Atomchess Dec/29/2015"
+        db " (c) 2015 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
         db "Most fun MBR ever!!"
