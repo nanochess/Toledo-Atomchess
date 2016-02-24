@@ -52,6 +52,8 @@
         ;   Saved 1 byte more replacing constant with register, now bootable 398 bytes (Peter Ferrie)
         ; Revision: Dec/29/2015 12:58 local time.
         ;   Saved 1 byte more replacing inc dl with inc dx, now bootable 397 bytes. (Oscar Toledo)
+        ; Revision: Feb/24/2015 16:03 local time.
+        ;   Saved 1 byte more in board initialization using mov cx,di, now bootable 396 bytes. (Oscar Toledo)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -60,7 +62,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 397 bytes size (runs in a boot sector) or 388 bytes (COM file)
+        ; * 396 bytes size (runs in a boot sector) or 387 bytes (COM file)
 
         use16
 
@@ -93,7 +95,7 @@ com_file:       equ 0
     %endif
         ; Create board
         mov di,board-8
-        mov cx,0x0108
+        mov cx,di       ; Trick: requires to be at least 0x0108 ;)
 sr1:    push di
         pop ax
         and al,0x88     ; 0x88 board
@@ -311,13 +313,13 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 113 bytes to say something
-        db "Toledo Atomchess Dec/29/2015"
-        db " (c) 2015 Oscar Toledo G. "
+        ; 114 bytes to say something
+        db "Toledo Atomchess Feb/24/2016"
+        db " (c)2015-2016 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
         db "Most fun MBR ever!!"
-        db 0,0,0,0
+        db 0
 
         ;
         ; This marker is required for BIOS to boot floppy disk

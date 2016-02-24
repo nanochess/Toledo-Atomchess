@@ -1,5 +1,5 @@
 Toledo Atomchess
-(c) Copyright 2015 Oscar Toledo G.
+(c) Copyright 2015-2016 Oscar Toledo G.
 
 http://www.nanochess.org/
 https://github.com/nanochess
@@ -9,8 +9,8 @@ for Toledo Atomchess and Toledo Atomchess Reloaded.
 
 Toledo Atomchess allows the player to play against the computer,
 the computer only plays basic legal chess movements, no promotion,
-no castling and no enpassant. All this in 397 bytes bootable from
-a floppy disk or 388 bytes if using the COM file.
+no castling and no enpassant. All this in 396 bytes bootable from
+a floppy disk or 387 bytes if using the COM file.
 
 Toledo Atomchess Reloaded allows full chess movements and
 currently sizes up to 779 bytes.
