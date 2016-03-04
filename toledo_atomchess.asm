@@ -52,9 +52,9 @@
         ;   Saved 1 byte more replacing constant with register, now bootable 398 bytes (Peter Ferrie)
         ; Revision: Dec/29/2015 12:58 local time.
         ;   Saved 1 byte more replacing inc dl with inc dx, now bootable 397 bytes. (Oscar Toledo)
-        ; Revision: Feb/24/2015 16:03 local time.
+        ; Revision: Feb/24/2016 16:03 local time.
         ;   Saved 1 byte more in board initialization using mov cx,di, now bootable 396 bytes. (Oscar Toledo)
-        ; Revision: Mar/04/2015 13:36 local time.
+        ; Revision: Mar/04/2016 13:36 local time.
         ;   Saved 4 bytes more saving one CALL instruction and using mov cl in display_board (courtesy of theshich)
 
         ; Features:
