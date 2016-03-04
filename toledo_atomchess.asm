@@ -54,6 +54,8 @@
         ;   Saved 1 byte more replacing inc dl with inc dx, now bootable 397 bytes. (Oscar Toledo)
         ; Revision: Feb/24/2015 16:03 local time.
         ;   Saved 1 byte more in board initialization using mov cx,di, now bootable 396 bytes. (Oscar Toledo)
+        ; Revision: Mar/04/2015 13:36 local time.
+        ;   Saved 4 bytes more saving one CALL instruction and using mov cl in display_board (courtesy of theshich)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -62,7 +64,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 396 bytes size (runs in a boot sector) or 387 bytes (COM file)
+        ; * 392 bytes size (runs in a boot sector) or 383 bytes (COM file)
 
         use16
 
@@ -118,15 +120,32 @@ sr3:    lodsb           ; Load piece
         ;
         ; Main loop
         ;
-sr21:   call display_board
-        call key2
-        push di
-        call key2
-        pop si
-        call sr28
-        call display_board ; returns cx to zero
-        call play       ; ch = 8=White, 0=Black
-        jmp short sr21
+        ; Note reversed order of calls
+        ;
+sr21:   push sr21               ; 7nd. Repeat loop
+        push play               ; 6nd. Computer play. ch = 8=White, 0=Black
+        push display_board      ; 5nd. Display board. Returns cx to zero
+        push sr28               ; 4nd. Make movement
+        mov si,key2
+        push si                 ; 3nd. Take coordinate
+        push si                 ; 2nd. Take coordinate
+        ; Inline function for displaying board
+display_board:
+        mov si,board-8
+                        ; Assume ch is zero, it would fail in previous
+                        ; loop if 'play' is called with ch=8
+        mov cl,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
+sr4:    lodsb
+        mov bx,chars    ; Note BH is reused outside this subroutine
+        xlatb
+        cmp al,0x0d     ; Is it RC?
+        jnz sr5         ; No, jump
+        add si,7        ; Jump 7 frontier bytes
+        call display    ; Display RC
+        mov al,0x0a     ; Now display LF
+sr5:    call display
+        loop sr4
+        ret             ; cx=0
 
 sr14:   inc dx          ; Shorter than inc dl and because doesn't overflow
         dec dh
@@ -252,24 +271,9 @@ sr10:   jc sr20         ; If isn't not pawn, jump,
         sbb dh,al       ; Yes, then avoid checking for two squares
         jmp short sr20
 
-        ; Display board
-display_board:
-        mov si,board-8
-        mov cx,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
-sr4:    lodsb
-        mov bx,chars    ; Note BH is reused outside this subroutine
-        xlatb
-        cmp al,0x0d     ; Is it RC?
-        jnz sr5         ; No, jump
-        add si,7        ; Jump 7 frontier bytes
-        call display    ; Display RC
-        mov al,0x0a     ; Now display LF
-sr5:    call display
-        loop sr4
-        ret             ; cx=0
-
         ; Read algebraic coordinate
-key2:   call key        ; Read letter
+key2:   xchg si,di
+        call key        ; Read letter
         xchg di,ax
                         ; Fall through to read number
 
@@ -313,13 +317,13 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 114 bytes to say something
-        db "Toledo Atomchess Feb/24/2016"
-        db " (c)2015-2016 Oscar Toledo G. "
+        ; 118 bytes to say something
+        db "Toledo Atomchess. Mar/04/2016"
+        db " (c) 2015-2016 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
         db "Most fun MBR ever!!"
-        db 0
+        db 0,0,0
 
         ;
         ; This marker is required for BIOS to boot floppy disk
