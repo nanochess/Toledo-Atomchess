@@ -56,6 +56,8 @@
         ;   Saved 1 byte more in board initialization using mov cx,di, now bootable 396 bytes. (Oscar Toledo)
         ; Revision: Mar/04/2016 13:36 local time.
         ;   Saved 4 bytes more saving one CALL instruction and using mov cl in display_board (courtesy of theshich)
+        ; Revision: Mar/26/2016 11:15 local time.
+        ;   Saved 1 byte more if video BIOS doesn't destroy AX on AH=0Eh/INT 10h (Peter Ferrie)
 
         ; Features:
         ; * Computer plays legal basic chess movements ;)
@@ -185,7 +187,11 @@ sr25:   dec si
         add al,0x04
         mov ah,al       ; Total movements of piece in ah (later dh)
         and ah,0x0c
+    %ifndef buggybios
+        mov bx,offsets-4
+    %else
         mov bl,offsets-4
+    %endif
         xlatb
         xchg dx,ax      ; Movements offset in dl
 sr12:   mov di,si       ; Restart target square
@@ -281,11 +287,15 @@ key2:   xchg si,di
 key:    mov ah,0        ; Read keyboard
         int 0x16        ; Call BIOS, only affects AX and Flags
 display:
+    %ifdef buggybios
         pusha
+    %endif
         mov ah,0x0e     ; Console output
         mov bh,0x00
         int 0x10        ; Call BIOS, can affect AX in older VGA BIOS.
+    %ifdef buggybios
         popa
+    %endif
         and ax,0x0f     ; Extract column
         imul bp,ax,-0x10; Calculate digit row multiplied by 16
         lea di,[bp+di+board+127] ; Substract board column
@@ -317,13 +327,12 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 118 bytes to say something
-        db "Toledo Atomchess. Mar/04/2016"
+        ; 119 bytes to say something
+        db "Toledo Atomchess. Mar/26/2016"
         db " (c) 2015-2016 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
-        db "Most fun MBR ever!!"
-        db 0,0,0
+        db "The most fun MBR ever!!"
 
         ;
         ; This marker is required for BIOS to boot floppy disk
