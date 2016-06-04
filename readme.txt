@@ -30,10 +30,12 @@ It can be run with DosBox or qemu:
   qemu-system-x86_64 -fda toledo_atomchess_disk.bin
   qemu-system-x86_64 -fda atomr.bin
 
-Thanks to HellMood for suggesting the translation of Toledo
-Atomchess to nasm syntax and some optimization suggestions.
+Thanks to following people:
 
-Also thanks to Peter Ferrie (qkumba) for suggestions.
+  * HellMood for suggesting the translation of Toledo Atomchess
+    to nasm syntax and some optimization suggestions.
+  * Peter Ferrie (qkumba) for suggestions.
+  * qu1j0t3 for providing a makefile.
 
 Enjoy it!
 
