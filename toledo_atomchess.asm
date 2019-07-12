@@ -97,7 +97,7 @@ com_file:       equ 0
     %endif
         ; Create board
         mov di,board-8
-        mov cx,di       ; Trick: requires to be at least 0x0108 ;)
+        mov cx,di       ; Trick: it needs to be at least 0x0108 ;)
 sr1:    push di
         pop ax
         and al,0x88     ; 0x88 board
@@ -132,7 +132,7 @@ sr21:   push sr21               ; 7nd. Repeat loop
         ; Inline function for displaying board
 display_board:
         mov si,board-8
-                        ; Assume ch is zero, it would fail in previous
+                        ; Assume ch is zero. It would fail in previous
                         ; loop if 'play' is called with ch=8
         mov cl,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
 sr4:    lodsb
@@ -199,7 +199,7 @@ sr9:    mov bl,dl       ; Build index into directions
         cmp dl,16+displacement    
         dec al          ; Check for empty square in z flag
         jz sr10         ; Goes to empty square, jump
-        jc sr27         ; If isn't not pawn, jump
+        jc sr27         ; If not pawn, jump
         cmp dh,3        ; Straight? 
         jb sr17         ; Yes, avoid and cancels any double square movement
 sr27:   xor al,ch
@@ -229,7 +229,7 @@ sr20:   push ax         ; Save for restoring in near future
         jnc sr22
         pusha           ; Save all state (including current side in ch)
         call sr28       ; Do move
-        xor ch,8        ; Change side
+        xor ch,8        ; Change sides
         inc cx          ; Increase depth
         call play
         mov bx,sp
@@ -258,14 +258,14 @@ sr18:   dec ah
         jz sr9          ; Yes, follow line of squares
 sr16:   jmp sr14
 
-sr10:   jc sr20         ; If isn't not pawn, jump,
+sr10:   jc sr20         ; If not pawn, jump,
         cmp dh,2        ; Diagonal? 
         ja sr18         ; Yes, avoid
         jnz short sr20  ; Advances one square? no, jump.
         xchg ax,si
         push ax
         sub al,0x20
-        cmp al,0x40     ; Moving from center of board?
+        cmp al,0x40     ; Moving from the center of the board?
         pop ax
         xchg ax,si
         sbb dh,al       ; Yes, then avoid checking for two squares
