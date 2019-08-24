@@ -1,5 +1,5 @@
 Toledo Atomchess
-(c) Copyright 2015-2016 Oscar Toledo G.
+(c) Copyright 2015-2019 Oscar Toledo G.
 
 http://www.nanochess.org/
 https://github.com/nanochess
@@ -22,13 +22,17 @@ In order to assemble it, you must download the Netwide Assembler
 
 Use this command line:
 
-  nasm -f bin toledo_atomchess.asm -o toledo_atomchess_disk.bin
-  nasm -f bin toledo_atomchess_reloaded.asm -o atomr.bin
+  nasm -f bin toledo_atomchess.asm -o toledo_atomchess_disk.img
+  nasm -f bin toledo_atomchess_reloaded.asm -o atomr.img
+
+Or this command line for compatibility with bootOS (see my repositories):
+
+  nasm -f bin toledo_atomchess.asm -Dbootos -o toledo_atomchess_bootos.img
 
 It can be run with DosBox or qemu:
   
-  qemu-system-x86_64 -fda toledo_atomchess_disk.bin
-  qemu-system-x86_64 -fda atomr.bin
+  qemu-system-x86_64 -fda toledo_atomchess_disk.img
+  qemu-system-x86_64 -fda atomr.img
 
 Thanks to following people:
 

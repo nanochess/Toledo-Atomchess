@@ -1,9 +1,9 @@
         ;
         ; Toledo Atomchess
         ;
-        ; by Óscar Toledo Gutiérrez
+        ; by îscar Toledo GutiŽrrez
         ;
-        ; © Copyright 2015 Óscar Toledo Gutiérrez
+        ; © Copyright 2015 îscar Toledo GutiŽrrez
         ;
         ; Creation: Jan/28/2015 21:00 local time.
         ; Revision: Jan/29/2015 18:17 local time. Finished.
@@ -66,7 +66,7 @@
         ; * No en passant.
         ; * 392 bytes size (runs in a boot sector) or 383 bytes (COM file)
 
-        use16
+        cpu 286
 
         ; Edit this to 0 for a bootable sector
         ; Edit this to 1 for a COM file
@@ -83,6 +83,7 @@ com_file:       equ 0
         ; Note careful use of side-effects along all code.
 
         ; Housekeeping
+start:
         cld
     %if com_file
         ; Saves 9 bytes in COM file because of preset environment ;)
@@ -140,7 +141,7 @@ sr4:    lodsb
         xlatb
         cmp al,0x0d     ; Is it RC?
         jnz sr5         ; No, jump
-        add si,7        ; Jump 7 frontier bytes
+        add si,byte 7   ; Jump 7 frontier bytes
         call display    ; Display RC
         mov al,0x0a     ; Now display LF
 sr5:    call display
@@ -157,7 +158,7 @@ sr6:    cmp si,board+120
         pop si
         test cl,cl      ; Top call?
         jne sr24
-        cmp bp,-127     ; Illegal move? (always in check)
+        cmp bp,byte -127 ; Illegal move? (always in check)
         jl sr24         ; Yes, doesn't move
 sr28:   movsb           ; Do move
         mov byte [si-1],0       ; Clear origin square
@@ -245,7 +246,7 @@ sr23:   pop ax          ; Restore board
         mov [si],ah
         mov [di],al
         jg sr18
-        add sp,4
+        add sp,byte 4
         push si         ; Save movement
         push di
 
@@ -280,6 +281,11 @@ key2:   xchg si,di
         ; Read a key and display it
 key:    mov ah,0        ; Read keyboard
         int 0x16        ; Call BIOS, only affects AX and Flags
+    %ifdef bootos
+        cmp al,0x1b     ; Esc key pressed?
+        jne display     ; No, jump
+        int 0x20        ; Exits to bootOS
+    %endif
 display:
         pusha
         mov ah,0x0e     ; Console output
@@ -300,13 +306,13 @@ chars:
         db ".prbqnk",0x0d,".PRBQNK"
 
 offsets:
-        db 16+displacement
-        db 20+displacement
-        db 8+displacement
-        db 12+displacement
-        db 8+displacement
-        db 0+displacement
-        db 8+displacement
+        db (16+displacement-start) & 255
+        db (20+displacement-start) & 255
+        db (8+displacement-start) & 255
+        db (12+displacement-start) & 255
+        db (8+displacement-start) & 255
+        db (0+displacement-start) & 255
+        db (8+displacement-start) & 255
 displacement:
         db -33,-31,-18,-14,14,18,31,33
         db -16,16,-1,1
@@ -317,18 +323,17 @@ displacement:
     %if com_file
 board:  equ 0x0300
     %else
-        ; 118 bytes to say something
-        db "Toledo Atomchess. Mar/04/2016"
-        db " (c) 2015-2016 Oscar Toledo G. "
+        ; Many bytes to say something
+        db "Toledo Atomchess. Aug/23/2019"
+        db " (c)2015-2019 Oscar Toledo G. "
         db "www.nanochess.org"
-        db " Happy coding! :-) "
-        db "Most fun MBR ever!!"
-        db 0,0,0
+        db " Happy coding :) "
+        db "Most fun MBR ever!"
 
         ;
         ; This marker is required for BIOS to boot floppy disk
         ;
-
+        times 510-($-$$) db 0x4f
         db 0x55,0xaa
 
 board:  equ $7e00
