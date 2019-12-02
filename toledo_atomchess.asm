@@ -1,9 +1,9 @@
         ;
         ; Toledo Atomchess
         ;
-        ; by îscar Toledo GutiŽrrez
+        ; by Óscar Toledo Gutiérrez
         ;
-        ; © Copyright 2015 îscar Toledo GutiŽrrez
+        ; © Copyright 2015 Óscar Toledo Gutiérrez
         ;
         ; Creation: Jan/28/2015 21:00 local time.
         ; Revision: Jan/29/2015 18:17 local time. Finished.
@@ -81,20 +81,16 @@ com_file:       equ 0
     %endif
 
         ; Note careful use of side-effects along all code.
-
-        ; Housekeeping
 start:
+        ; Housekeeping
         cld
     %if com_file
         ; Saves 9 bytes in COM file because of preset environment ;)
     %else
-        mov sp,stack
-        push cs
         push cs
         push cs
         pop ds
         pop es
-        pop ss
     %endif
         ; Create board
         mov di,board-8
@@ -158,7 +154,7 @@ sr6:    cmp si,board+120
         pop si
         test cl,cl      ; Top call?
         jne sr24
-        cmp bp,byte -127 ; Illegal move? (always in check)
+        cmp bp,byte -127    ; Illegal move? (any move = always in check)
         jl sr24         ; Yes, doesn't move
 sr28:   movsb           ; Do move
         mov byte [si-1],0       ; Clear origin square
@@ -184,9 +180,9 @@ sr7:    lodsb           ; Read square
 sr8:    inc ax
 sr25:   dec si
         add al,0x04
-        mov ah,al       ; Total movements of piece in ah (later dh)
-        and ah,0x0c
-        mov bl,offsets-4
+        mov ah,0x0c
+        and ah,al       ; Total movements of piece in ah (later dh)
+        mov bl,(offsets-4-start) & 255
         xlatb
         xchg dx,ax      ; Movements offset in dl
 sr12:   mov di,si       ; Restart target square
@@ -197,7 +193,7 @@ sr9:    mov bl,dl       ; Build index into directions
         mov al,[di]     ; Content of target square in al
         inc ax
         mov ah,[si]     ; Content of origin square in ah
-        cmp dl,16+displacement    
+        cmp dl,(16+displacement-start) & 255
         dec al          ; Check for empty square in z flag
         jz sr10         ; Goes to empty square, jump
         jc sr27         ; If not pawn, jump
@@ -220,7 +216,7 @@ sr26:   pop ax          ; Ignore values
 
 sr20:   push ax         ; Save for restoring in near future
         and al,7
-        mov bl,scores
+        mov bl,(scores-start) & 255
         xlatb
         cbw
 ;        cmp cl,4  ; 4-ply depth
@@ -262,7 +258,7 @@ sr16:   jmp sr14
 sr10:   jc sr20         ; If not pawn, jump,
         cmp dh,2        ; Diagonal? 
         ja sr18         ; Yes, avoid
-        jnz short sr20  ; Advances one square? no, jump.
+        jnz short sr20  ; Advances one square? No, jump.
         xchg ax,si
         push ax
         sub al,0x20
@@ -283,8 +279,8 @@ key:    mov ah,0        ; Read keyboard
         int 0x16        ; Call BIOS, only affects AX and Flags
     %ifdef bootos
         cmp al,0x1b     ; Esc key pressed?
-        jne display     ; No, jump
-        int 0x20        ; Exits to bootOS
+        jne display     ; No, jump.
+        int 0x20        ; Exits to bootOS.
     %endif
 display:
         pusha
@@ -324,20 +320,21 @@ displacement:
 board:  equ 0x0300
     %else
         ; Many bytes to say something
-        db "Toledo Atomchess. Aug/23/2019"
-        db " (c)2015-2019 Oscar Toledo G. "
+        db "Toledo Atomchess. Dec/02/2019"
+        db " (c) 2015-2019 Oscar Toledo G. "
         db "www.nanochess.org"
-        db " Happy coding :) "
-        db "Most fun MBR ever!"
+        db " Happy coding! :-) "
+        db "Most fun MBR ever!!"
+        db 0
+
+        times 510-($-$$) db 0x4f
 
         ;
         ; This marker is required for BIOS to boot floppy disk
         ;
-        times 510-($-$$) db 0x4f
+
         db 0x55,0xaa
 
 board:  equ $7e00
-
-stack:  equ $8000
     %endif
 
