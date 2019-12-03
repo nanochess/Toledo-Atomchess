@@ -148,7 +148,7 @@ sr14:   inc dx          ; Shorter than inc dl and because doesn't overflow
         dec dh
         jnz sr12
 sr17:   inc si
-sr6:    cmp si,board+120
+        cmp si,board+120
         jne sr7
         pop di
         pop si
@@ -168,18 +168,15 @@ play:   mov bp,-256     ; Current score
         push bp         ; Target square
 
         mov si,board
-sr7:    lodsb           ; Read square
+sr7:    mov al,[si]     ; Read square
         xor al,ch       ; XOR with current playing side
         dec ax          ; Empty square 0x00 becomes 0xFF
         cmp al,6        ; Ignore if frontier or empty
-        jnc sr6
-        or al,al        ; Is it pawn?
-        jnz sr8
-        or ch,ch        ; Is it playing black?
-        jnz sr25        ; No, jump
+        jnc sr17
+        cmp byte [si],9 ; Is it a white pawn?
+        jz sr25         ; Yes, jump
 sr8:    inc ax
-sr25:   dec si
-        add al,0x04
+sr25:   add al,0x04
         mov ah,0x0c
         and ah,al       ; Total movements of piece in ah (later dh)
         mov bl,(offsets-4-start) & 255
