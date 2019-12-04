@@ -64,7 +64,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 392 bytes size (runs in a boot sector) or 383 bytes (COM file)
+        ; * 380 bytes size (runs in a boot sector) or 376 bytes (COM file)
 
         cpu 286
 
@@ -173,10 +173,8 @@ sr7:    mov al,[si]     ; Read square
         dec ax          ; Empty square 0x00 becomes 0xFF
         cmp al,6        ; Ignore if frontier or empty
         jnc sr17
-        cmp byte [si],9 ; Is it a white pawn?
-        jz sr25         ; Yes, jump
-sr8:    inc ax
-sr25:   add al,0x04
+        cmp byte [si],2 ; Is it a black pawn?
+        sbb al,0xfb
         mov ah,0x0c
         and ah,al       ; Total movements of piece in ah (later dh)
         mov bl,(offsets-4-start) & 255
@@ -310,8 +308,8 @@ displacement:
         db -33,-31,-18,-14,14,18,31,33
         db -16,16,-1,1
         db 15,17,-15,-17
-        db -15,-17,-16,-32
         db 15,17,16,32
+        db -15,-17,-16,-32
 
     %if com_file
 board:  equ 0x0300
