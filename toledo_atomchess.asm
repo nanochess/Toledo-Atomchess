@@ -64,7 +64,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 380 bytes size (runs in a boot sector) or 376 bytes (COM file)
+        ; * 379 bytes size (runs in a boot sector) or 375 bytes (COM file)
 
         cpu 286
 
@@ -198,7 +198,7 @@ sr27:   xor al,ch
         sub al,0x09     ; Valid capture?
         cmp al,0x05     ; Check Z with king, C=0 for higher (invalid)
         mov al,[di]
-        ja sr18         ; No, avoid
+        ja sr14         ; No, avoid
         ; z=0/1 if king captured
         jne sr20        ; Wizard trick, jump if not captured king
         dec cl          ; If not in first response...
@@ -241,18 +241,18 @@ sr23:   pop ax          ; Restore board
         push si         ; Save movement
         push di
 
-sr18:   dec ah
-        xor ah,ch       ; Was it pawn?
-        jz sr16         ; Yes, end sequence, choose next movement
-        cmp ah,0x04     ; Knight or king?
-        jnc sr16        ; End sequence, choose next movement
-        or al,al        ; To empty square?
-        jz sr9          ; Yes, follow line of squares
+sr18:   or al,al        ; To non-empty square?
+        jnz sr16        ; Yes, finish streak
+        mov al,[si]
+        and al,7
+        sub al,2
+        cmp al,0x03     ; Knight, king or pawn?
+        jc sr9          ; No, continue streak
 sr16:   jmp sr14
 
 sr10:   jc sr20         ; If not pawn, jump,
         cmp dh,2        ; Diagonal? 
-        ja sr18         ; Yes, avoid
+        ja sr16         ; Yes, avoid
         jnz short sr20  ; Advances one square? No, jump.
         xchg ax,si
         push ax
