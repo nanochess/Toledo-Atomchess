@@ -64,7 +64,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 379 bytes size (runs in a boot sector) or 375 bytes (COM file)
+        ; * 370 bytes size (runs in a boot sector) or 366 bytes (COM file)
 
         cpu 286
 
@@ -154,8 +154,12 @@ sr17:   inc si
         pop si
         test cl,cl      ; Top call?
         jne sr24
-        cmp bp,byte -127    ; Illegal move? (any move = always in check)
-        jl sr24         ; Yes, doesn't move
+        ;
+        ; If any response equals to always in check,
+        ; it means the move wasn't never saved, so
+        ; it moves piece from 0xff80 to 0xff80
+        ; (outside the board).
+        ;
 sr28:   movsb           ; Do move
         mov byte [si-1],0       ; Clear origin square
 sr24:   ret
@@ -163,7 +167,7 @@ sr24:   ret
         ;
         ; Computer plays :)
         ;
-play:   mov bp,-256     ; Current score
+play:   mov bp,-128     ; Current score (notice higher than -384 and -192)
         push bp         ; Origin square
         push bp         ; Target square
 
@@ -195,21 +199,19 @@ sr9:    mov bl,dl       ; Build index into directions
         cmp dh,3        ; Straight? 
         jb sr17         ; Yes, avoid and cancels any double square movement
 sr27:   xor al,ch
-        sub al,0x09     ; Valid capture?
-        cmp al,0x05     ; Check Z with king, C=0 for higher (invalid)
-        mov al,[di]
+        sub al,0x09     ; Is it a valid capture?
+        cmp al,0x05     ; Z set if king, C clear for greater than (invalid)
         ja sr14         ; No, avoid
         ; z=0/1 if king captured
         jne sr20        ; Wizard trick, jump if not captured king
-        dec cl          ; If not in first response...
-        mov bp,78       ; ...maximum score
-        jne sr26
-        add bp,bp       ; Maximum score (probably checkmate/stalemate)
-sr26:   pop ax          ; Ignore values
+        mov bp,384      ; Maximum score.
+        shr bp,cl       ; It gets lower to prefer shortest checkmate
+        pop ax          ; Ignore values
         pop ax
         ret
 
-sr20:   push ax         ; Save for restoring in near future
+sr20:   mov al,[di]
+        push ax         ; Save for restoring in near future
         and al,7
         mov bl,(scores-start) & 255
         xlatb
