@@ -64,7 +64,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 370 bytes size (runs in a boot sector) or 366 bytes (COM file)
+        ; * 368 bytes size (runs in a boot sector) or 364 bytes (COM file)
 
         cpu 286
 
@@ -119,10 +119,13 @@ sr3:    lodsb           ; Load piece
         ;
         ; Note reversed order of calls
         ;
-sr21:   push sr21               ; 7nd. Repeat loop
+sr21:
+        mov di,sr28
+        push sr21               ; 8nd. Repeat loop
+        push di                 ; 7nd. Make movement
         push play               ; 6nd. Computer play. ch = 8=White, 0=Black
         push display_board      ; 5nd. Display board. Returns cx to zero
-        push sr28               ; 4nd. Make movement
+        push di                 ; 4nd. Make movement
         mov si,key2
         push si                 ; 3nd. Take coordinate
         push si                 ; 2nd. Take coordinate
@@ -150,10 +153,10 @@ sr14:   inc dx          ; Shorter than inc dl and because doesn't overflow
 sr17:   inc si
         cmp si,board+120
         jne sr7
-        pop di
+sr8:    pop di
         pop si
-        test cl,cl      ; Top call?
-        jne sr24
+        ret
+
         ;
         ; If any response equals to always in check,
         ; it means the move wasn't never saved, so
@@ -162,7 +165,7 @@ sr17:   inc si
         ;
 sr28:   movsb           ; Do move
         mov byte [si-1],0       ; Clear origin square
-sr24:   ret
+        ret
 
         ;
         ; Computer plays :)
@@ -206,9 +209,7 @@ sr27:   xor al,ch
         jne sr20        ; Wizard trick, jump if not captured king
         mov bp,384      ; Maximum score.
         shr bp,cl       ; It gets lower to prefer shortest checkmate
-        pop ax          ; Ignore values
-        pop ax
-        ret
+        jmp sr8         ; Ignore values
 
 sr20:   mov al,[di]
         push ax         ; Save for restoring in near future
