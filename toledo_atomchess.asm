@@ -64,7 +64,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 368 bytes size (runs in a boot sector) or 364 bytes (COM file)
+        ; * 364 bytes size (runs in a boot sector) or 360 bytes (COM file)
 
         cpu 286
 
@@ -80,12 +80,23 @@ com_file:       equ 0
         org 0x7c00
     %endif
 
+PAWN:   equ 0x01
+ROOK:   equ 0x02
+BISHOP: equ 0x03
+QUEEN:  equ 0x04
+KNIGHT: equ 0x05
+KING:   equ 0x06
+
+FRONTIER:       equ 0x07
+
+SIDE:   equ 0x08
+                
         ; Note careful use of side-effects along all code.
 start:
         ; Housekeeping
         cld
     %if com_file
-        ; Saves 9 bytes in COM file because of preset environment ;)
+        ; Saves 4 bytes in COM file because of preset environment ;)
     %else
         push cs
         push cs
@@ -99,7 +110,7 @@ sr1:    push di
         pop ax
         and al,0x88     ; 0x88 board
         jz sr2
-        mov al,0x07     ; Frontier
+        mov al,FRONTIER ; Frontier
 sr2:    stosb
         loop sr1
         ; Setup board
@@ -108,10 +119,10 @@ sr2:    stosb
         mov cl,0x08
 sr3:    lodsb           ; Load piece
         stosb           ; Black pieces
-        or al,8
+        or al,SIDE
         mov [di+0x6f],al ; White pieces
-        inc byte [di+0x0f]      ; Black pawn
-        mov byte [di+0x5f],0x09 ; White pawn
+        inc byte [di+0x0f]      ; Black pawn (PAWN)
+        mov byte [di+0x5f],PAWN+SIDE    ; White pawn
         loop sr3
 
         ;
@@ -151,8 +162,7 @@ sr14:   inc dx          ; Shorter than inc dl and because doesn't overflow
         dec dh
         jnz sr12
 sr17:   inc si
-        cmp si,board+120
-        jne sr7
+        jns sr7
 sr8:    pop di
         pop si
         ret
@@ -180,7 +190,7 @@ sr7:    mov al,[si]     ; Read square
         dec ax          ; Empty square 0x00 becomes 0xFF
         cmp al,6        ; Ignore if frontier or empty
         jnc sr17
-        cmp byte [si],2 ; Is it a black pawn?
+        cmp byte [si],PAWN+1 ; Is it a black pawn?
         sbb al,0xfb
         mov ah,0x0c
         and ah,al       ; Total movements of piece in ah (later dh)
@@ -202,8 +212,8 @@ sr9:    mov bl,dl       ; Build index into directions
         cmp dh,3        ; Straight? 
         jb sr17         ; Yes, avoid and cancels any double square movement
 sr27:   xor al,ch
-        sub al,0x09     ; Is it a valid capture?
-        cmp al,0x05     ; Z set if king, C clear for greater than (invalid)
+        sub al,SIDE+1   ; Is it a valid capture?
+        cmp al,KING-1   ; Z set if king, C clear for greater than (invalid)
         ja sr14         ; No, avoid
         ; z=0/1 if king captured
         jne sr20        ; Wizard trick, jump if not captured king
@@ -224,7 +234,7 @@ sr20:   mov al,[di]
         jnc sr22
         pusha           ; Save all state (including current side in ch)
         call sr28       ; Do move
-        xor ch,8        ; Change sides
+        xor ch,SIDE     ; Change sides
         inc cx          ; Increase depth
         call play
         mov bx,sp
@@ -249,7 +259,7 @@ sr18:   or al,al        ; To non-empty square?
         mov al,[si]
         and al,7
         sub al,2
-        cmp al,0x03     ; Knight, king or pawn?
+        cmp al,KNIGHT-2 ; Knight, king or pawn?
         jc sr9          ; No, continue streak
 sr16:   jmp sr14
 
@@ -292,7 +302,7 @@ display:
         ret
 
 initial:
-        db 2,5,3,4,6,3,5,2
+        db ROOK,KNIGHT,BISHOP,QUEEN,KING,BISHOP,KNIGHT,ROOK
 scores:
         db 0,1,5,3,9,3
 
@@ -315,7 +325,6 @@ displacement:
         db -15,-17,-16,-32
 
     %if com_file
-board:  equ 0x0300
     %else
         ; Many bytes to say something
         db "Toledo Atomchess. Dec/02/2019"
@@ -332,7 +341,6 @@ board:  equ 0x0300
         ;
 
         db 0x55,0xaa
-
-board:  equ $7e00
     %endif
 
+board:  equ $7f00
