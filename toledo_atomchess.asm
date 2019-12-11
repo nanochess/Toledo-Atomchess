@@ -64,7 +64,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 364 bytes size (runs in a boot sector) or 360 bytes (COM file)
+        ; * 360 bytes size (runs in a boot sector) or 356 bytes (COM file)
 
         cpu 286
 
@@ -89,7 +89,7 @@ KING:   equ 0x06
 
 FRONTIER:       equ 0x07
 
-SIDE:   equ 0x08
+SIDE:   equ 0x20
                 
         ; Note careful use of side-effects along all code.
 start:
@@ -131,24 +131,24 @@ sr3:    lodsb           ; Load piece
         ; Note reversed order of calls
         ;
 sr21:
-        mov di,sr28
         push sr21               ; 8nd. Repeat loop
-        push di                 ; 7nd. Make movement
         push play               ; 6nd. Computer play. ch = 8=White, 0=Black
         push display_board      ; 5nd. Display board. Returns cx to zero
-        push di                 ; 4nd. Make movement
-        mov si,key2
-        push si                 ; 3nd. Take coordinate
-        push si                 ; 2nd. Take coordinate
+        mov bx,key2
+        push bx                 ; 3nd. Take coordinate
+        push bx                 ; 2nd. Take coordinate
         ; Inline function for displaying board
 display_board:
+        call make_move
         mov si,board-8
                         ; Assume ch is zero. It would fail in previous
                         ; loop if 'play' is called with ch=8
         mov cl,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
 sr4:    lodsb
+        and al,7
         mov bx,chars    ; Note BH is reused outside this subroutine
         xlatb
+        sub al,[si-1]
         cmp al,0x0d     ; Is it RC?
         jnz sr5         ; No, jump
         add si,byte 7   ; Jump 7 frontier bytes
@@ -173,7 +173,8 @@ sr8:    pop di
         ; it moves piece from 0xff80 to 0xff80
         ; (outside the board).
         ;
-sr28:   movsb           ; Do move
+make_move:
+        movsb           ; Do move
         mov byte [si-1],0       ; Clear origin square
         ret
 
@@ -233,7 +234,7 @@ sr20:   mov al,[di]
 ;        cmp cl,1  ; 1-ply depth
         jnc sr22
         pusha           ; Save all state (including current side in ch)
-        call sr28       ; Do move
+        call make_move  ; Do move
         xor ch,SIDE     ; Change sides
         inc cx          ; Increase depth
         call play
@@ -304,10 +305,18 @@ display:
 initial:
         db ROOK,KNIGHT,BISHOP,QUEEN,KING,BISHOP,KNIGHT,ROOK
 scores:
-        db 0,1,5,3,9,3
+        db FRONTIER     ; Self-modified to zero
+        db 1,5,3,9,3
 
 chars:
-        db ".prbqnk",0x0d,".PRBQNK"
+        db 0x2e+0x00
+        db 0x70+0x01
+        db 0x72+0x02
+        db 0x62+0x03
+        db 0x71+0x04
+        db 0x6e+0x05
+        db 0x6b+0x06
+        db 0x0d+0x07
 
 offsets:
         db (16+displacement-start) & 255
@@ -327,7 +336,7 @@ displacement:
     %if com_file
     %else
         ; Many bytes to say something
-        db "Toledo Atomchess. Dec/02/2019"
+        db "Toledo Atomchess. Dec/10/2019"
         db " (c) 2015-2019 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
