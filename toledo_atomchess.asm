@@ -123,7 +123,7 @@ sr3:    lodsb           ; Load piece
         mov [di+0x6f],al ; White pieces
         inc byte [di+0x0f]      ; Black pawn (PAWN)
         mov byte [di+0x5f],PAWN+SIDE    ; White pawn
-        loop sr3
+        loop sr3        ; cx = 0
 
         ;
         ; Main loop
@@ -143,20 +143,20 @@ display_board:
         mov si,board-8
                         ; Assume ch is zero. It would fail in previous
                         ; loop if 'play' is called with ch=8
-        mov cl,73       ; 1 frontier + 8 rows * (8 cols + 1 frontier)
-sr4:    lodsb
+sr4:    mov al,[si]
         and al,7
         mov bx,chars    ; Note BH is reused outside this subroutine
         xlatb
-        sub al,[si-1]
+        sub al,[si]
         cmp al,0x0d     ; Is it RC?
         jnz sr5         ; No, jump
         add si,byte 7   ; Jump 7 frontier bytes
         call display    ; Display RC
         mov al,0x0a     ; Now display LF
 sr5:    call display
-        loop sr4
-        ret             ; cx=0
+        inc si
+        jns sr4
+        ret             
 
 sr14:   inc dx          ; Shorter than inc dl and because doesn't overflow
         dec dh
@@ -174,7 +174,7 @@ sr8:    pop di
         ; (outside the board).
         ;
 make_move:
-        movsb           ; Do move
+        movsb                   ; Do move
         mov byte [si-1],0       ; Clear origin square
         ret
 
