@@ -64,7 +64,7 @@
         ; * No promotion of pawns.
         ; * No castling
         ; * No en passant.
-        ; * 360 bytes size (runs in a boot sector) or 356 bytes (COM file)
+        ; * 356 bytes size (runs in a boot sector) or 352 bytes (COM file)
 
         cpu 286
 
@@ -141,8 +141,6 @@ sr21:
 display_board:
         call make_move
         mov si,board-8
-                        ; Assume ch is zero. It would fail in previous
-                        ; loop if 'play' is called with ch=8
 sr4:    mov al,[si]
         and al,7
         mov bx,chars    ; Note BH is reused outside this subroutine
@@ -176,6 +174,7 @@ sr8:    pop di
 make_move:
         movsb                   ; Do move
         mov byte [si-1],0       ; Clear origin square
+        xor ch,SIDE
         ret
 
         ;
@@ -205,7 +204,6 @@ sr9:    mov bl,dl       ; Build index into directions
         xchg ax,di
         mov al,[di]     ; Content of target square in al
         inc ax
-        mov ah,[si]     ; Content of origin square in ah
         cmp dl,(16+displacement-start) & 255
         dec al          ; Check for empty square in z flag
         jz sr10         ; Goes to empty square, jump
@@ -215,49 +213,47 @@ sr9:    mov bl,dl       ; Build index into directions
 sr27:   xor al,ch
         sub al,SIDE+1   ; Is it a valid capture?
         cmp al,KING-1   ; Z set if king, C clear for greater than (invalid)
-        ja sr14         ; No, avoid
+        ja sr14         ; No, avoid and try next direction
         ; z=0/1 if king captured
+        mov al,[di]     ; Restore AL
         jne sr20        ; Wizard trick, jump if not captured king
         mov bp,384      ; Maximum score.
         shr bp,cl       ; It gets lower to prefer shortest checkmate
         jmp sr8         ; Ignore values
 
-sr20:   mov al,[di]
-        push ax         ; Save for restoring in near future
+sr20:   push ax         ; Save AH+AL for restoring board
         and al,7
         mov bl,(scores-start) & 255
         xlatb
         cbw
+        pusha           ; Save all state (including current side in ch)
+        call make_move  ; Do move
 ;        cmp cl,4  ; 4-ply depth
         cmp cl,3  ; 3-ply depth
 ;        cmp cl,2  ; 2-ply depth
 ;        cmp cl,1  ; 1-ply depth
         jnc sr22
-        pusha           ; Save all state (including current side in ch)
-        call make_move  ; Do move
-        xor ch,SIDE     ; Change sides
         inc cx          ; Increase depth
         call play
         mov bx,sp
         sub [bx+14],bp  ; Substract BP from AX
-        popa            ; Save all state (including current side in ch)
-sr22:   cmp bp,ax       ; Better score?
+sr22:   popa            ; Save all state (including current side in ch)
+        cmp bp,ax       ; Better score?
         jg sr23         ; No, jump
         xchg ax,bp      ; New best score
         jne sr23        ; Same score?
         in al,(0x40)
         cmp al,0xaa     ; Randomize it
 sr23:   pop ax          ; Restore board
-        mov [si],ah
-        mov [di],al
+        xchg [di],al
+        mov [si],al
         jg sr18
         add sp,byte 4
         push si         ; Save movement
         push di
 
-sr18:   or al,al        ; To non-empty square?
+sr18:   cmp byte [di],0 ; To non-empty square?
         jnz sr16        ; Yes, finish streak
-        mov al,[si]
         and al,7
         sub al,2
         cmp al,KNIGHT-2 ; Knight, king or pawn?
@@ -284,7 +280,8 @@ key2:   xchg si,di
                         ; Fall through to read number
 
         ; Read a key and display it
-key:    mov ah,0        ; Read keyboard
+key:
+        mov ah,0        ; Read keyboard.
         int 0x16        ; Call BIOS, only affects AX and Flags
     %ifdef bootos
         cmp al,0x1b     ; Esc key pressed?
