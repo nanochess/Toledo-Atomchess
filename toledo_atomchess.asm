@@ -22,8 +22,8 @@
         ;   o No en passant.
         ;   o 356 bytes size (runs in a boot sector) or 352 bytes (COM file)
         ;
-        ; Enable the HACK label for getting 332 bytes (boot sector)
-        ; or 328 bytes (COM file), it will remove the following features:
+        ; Enable the HACK label for getting 331 bytes (boot sector)
+        ; or 327 bytes (COM file), it will remove the following features:
         ;
         ;   o Game randomization (it will play the same game always).
         ;   o Shortest mate search (it can defer checkmate or delay it).
@@ -33,7 +33,7 @@
 
         cpu 286
 
-HACK:   equ 0
+HACK:   equ 1
 
         ; Edit this to 0 for a bootable sector
         ; Edit this to 1 for a COM file
@@ -238,8 +238,7 @@ sr10:   jc sr20         ; If not pawn, jump,
         cmp dh,2        ; Diagonal? 
         ja sr16         ; Yes, avoid
     %if HACK
-        cmc
-        sbb dh,al
+        dec dh
     %else
         jnz short sr20  ; Advances one square? No, jump.
         xchg ax,si

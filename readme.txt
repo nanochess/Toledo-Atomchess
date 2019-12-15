@@ -11,7 +11,7 @@ Toledo Atomchess allows the player to play against the computer,
 the computer only plays basic legal chess movements, no promotion,
 no castling and no enpassant. All this in 356 bytes bootable from
 a floppy disk or 352 bytes if using the COM file. Also there is
-a HACK mode version reaching 328 bytes with COM file, or 332 bytes
+a HACK mode version reaching 327 bytes with COM file, or 331 bytes
 bootable.
 
 Toledo Atomchess Reloaded plays full chess movements and
