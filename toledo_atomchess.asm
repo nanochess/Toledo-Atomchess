@@ -1,9 +1,9 @@
         ;
         ; Toledo Atomchess
-        ; by Óscar Toledo Gutiérrez
+        ; by Oscar Toledo Gutierrez
         ; http://nanochess.org/
         ;
-        ; © Copyright 2015-2019 Óscar Toledo Gutiérrez
+        ; © Copyright 2015-2019 Oscar Toledo Gutierrez
         ;
         ; Creation: Jan/28/2015 21:00 local time.
         ;
