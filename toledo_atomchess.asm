@@ -1,72 +1,39 @@
         ;
         ; Toledo Atomchess
+        ; by îscar Toledo GutiŽrrez
+        ; http://nanochess.org/
         ;
-        ; by Óscar Toledo Gutiérrez
-        ;
-        ; © Copyright 2015 Óscar Toledo Gutiérrez
+        ; © Copyright 2015-2019 îscar Toledo GutiŽrrez
         ;
         ; Creation: Jan/28/2015 21:00 local time.
-        ; Revision: Jan/29/2015 18:17 local time. Finished.
-        ; Revision: Jan/30/2015 13:34 local time. Debugging finished.
-        ; Revision: Jun/01/2015 10:08 local time. Solved bug where computer bishops never moved over upper diagonals.
-        ; Revision: Oct/06/2015 06:38 local time. Optimized board setup/display, plus tiny bits.
-        ; Revision: Oct/07/2015 14:47 local time. More optimization and debugged.
-        ; Revision: Oct/10/2015 08:21 local time. More optimization.
-        ; Revision: Oct/22/2015 16:59 local time. Now in nasm syntax and uses LEA per HellMood suggestion, 1 byte saved. Relocated sr20 per suggestion of Peter Ferrie (qkumba), saves 2 bytes.
-        ; Revision: Oct/23/2015 10:49 local time. Replaced TEST CL,1 with SAL CL,1, and changed AND CL,0x1f CMP CL,0x10 with CMP DL,2. 5 bytes saved.
-        ; Revision: Oct/23/2015 19:52 local time.
-        ;   Integrated Peter Ferrie suggestions: moved subroutines
-        ;   and changed 16-bit load to 8-bit for 4 bytes.
-        ; Revision: Oct/23/2015 20:31 local time.
-        ;   Constants reduced on my own for other 2 bytes.
-        ; Revision: Oct/23/2015 20:45 local time.
-        ;   Removed push cx/pop cx because pusha/popa internally
-        ;   does the job, changed push di/pop ax to xchg ax,di
-        ;   after confirming INT 0x16 doesn't affect di (Peter Ferrie)
-        ;   4 bytes less.
-        ; Revision: Oct/23/2015 21:09 Solved bug where computer pawn could
-        ;   "jump" over own pawn. Saved two bytes more reusing ch as zero
-        ;   before first "call play"
-        ; Revision: Oct/24/2015 10:09 local time.
-        ;   Reduced another 6 bytes redesigning the next target square
-        ;   calculation.
-        ; Revision: Oct/24/2015 18:21 local time.
-        ;   Changed xlat to xlatb for yasm compatibility. (Peter Ferrie)
-        ;   CL now used for current ply depth, removes ugly SP code so now MOV SP removed for COM file (Oscar Toledo)
-        ;   Integrated offset of movement in table.
-        ; Revision: Oct/25/2015 11:07 local time.
-        ;   Reduced another 1 byte by reordering registers to enable XCHG. (Peter Ferrie)
-        ; Revision: Oct/26/2015 12:48 local time.
-        ;   Reduced 2 bytes more exchanging AH and AL in piece move code and an arithmetic trick with CH. (Oscar Toledo)
-        ; Revision: Oct/26/2015 13:44 local time.
-        ;   Reduced 3 bytes more reusing check comparison.
-        ; Revision: Oct/29/2015 10:58 local time.
-        ;   Reduced another 2 bytes by replacing MOV ,1 with INC; replaced ADD+SHL+SUB with IMUL+LEA. (Peter Ferrie)
-        ; Revision: Oct/29/2015 13:05 local time.
-        ;   Reduced another 4 bytes by allowing dummy calculation pass. (Peter Ferrie)
-        ; Revision: Oct/29/2015 16:03 local time.
-        ;   Reduced 2 bytes more merging cmp dl,16+displacement (Oscar Toledo)
-        ; Revision: Oct/29/2015 17:03 local time.
-        ;   Saved 1 byte more redesigning pawn 2 square advance, now bootable 399 bytes (Oscar Toledo)
-        ; Revision: Nov/02/2015 21:55 local time.
-        ;   Saved 1 byte more replacing constant with register, now bootable 398 bytes (Peter Ferrie)
-        ; Revision: Dec/29/2015 12:58 local time.
-        ;   Saved 1 byte more replacing inc dl with inc dx, now bootable 397 bytes. (Oscar Toledo)
-        ; Revision: Feb/24/2016 16:03 local time.
-        ;   Saved 1 byte more in board initialization using mov cx,di, now bootable 396 bytes. (Oscar Toledo)
-        ; Revision: Mar/04/2016 13:36 local time.
-        ;   Saved 4 bytes more saving one CALL instruction and using mov cl in display_board (courtesy of theshich)
+        ;
+        ; Latest version and logs at https://github.com/nanochess
+        ; Previous version published in Programming Boot Sector Games
+        ;
 
         ; Features:
-        ; * Computer plays legal basic chess movements ;)
-        ; * Enter moves as algebraic form (D2D4) (note your moves aren't validated)
-        ; * Search depth of 3-ply
-        ; * No promotion of pawns.
-        ; * No castling
-        ; * No en passant.
-        ; * 356 bytes size (runs in a boot sector) or 352 bytes (COM file)
+        ;
+        ;   o Computer plays legal basic chess movements ;)
+        ;   o Player enter moves as algebraic form (D2D4)
+        ;     (notice your moves aren't validated)
+        ;   o Search depth of 3-ply
+        ;   o No promotion of pawns.
+        ;   o No castling
+        ;   o No en passant.
+        ;   o 356 bytes size (runs in a boot sector) or 352 bytes (COM file)
+        ;
+        ; Enable the HACK label for getting 332 bytes (boot sector)
+        ; or 328 bytes (COM file), it will remove the following features:
+        ;
+        ;   o Game randomization (it will play the same game always).
+        ;   o Shortest mate search (it can defer checkmate or delay it).
+        ;   o Computer will be unable to play pawns two squares ahead.
+        ;     (extremely ugly)
+        ;
 
         cpu 286
+
+HACK:   equ 0
 
         ; Edit this to 0 for a bootable sector
         ; Edit this to 1 for a COM file
@@ -174,13 +141,13 @@ sr8:    pop di
 make_move:
         movsb                   ; Do move
         mov byte [si-1],0       ; Clear origin square
-        xor ch,SIDE
         ret
 
         ;
         ; Computer plays :)
         ;
-play:   mov bp,-128     ; Current score (notice higher than -384 and -192)
+play:
+        mov bp,-128     ; Current score (notice higher than -384 and -192)
         push bp         ; Origin square
         push bp         ; Target square
 
@@ -216,10 +183,13 @@ sr27:   xor al,ch
         ja sr14         ; No, avoid and try next direction
         ; z=0/1 if king captured
         mov al,[di]     ; Restore AL
+    %if HACK
+    %else
         jne sr20        ; Wizard trick, jump if not captured king
         mov bp,384      ; Maximum score.
         shr bp,cl       ; It gets lower to prefer shortest checkmate
         jmp sr8         ; Ignore values
+    %endif
 
 sr20:   push ax         ; Save AH+AL for restoring board
         and al,7
@@ -233,6 +203,7 @@ sr20:   push ax         ; Save AH+AL for restoring board
 ;        cmp cl,2  ; 2-ply depth
 ;        cmp cl,1  ; 1-ply depth
         jnc sr22
+        xor ch,SIDE
         inc cx          ; Increase depth
         call play
         mov bx,sp
@@ -241,9 +212,12 @@ sr22:   popa            ; Save all state (including current side in ch)
         cmp bp,ax       ; Better score?
         jg sr23         ; No, jump
         xchg ax,bp      ; New best score
+    %if HACK
+    %else
         jne sr23        ; Same score?
         in al,(0x40)
         cmp al,0xaa     ; Randomize it
+    %endif
 sr23:   pop ax          ; Restore board
         xchg [di],al
         mov [si],al
@@ -263,6 +237,10 @@ sr16:   jmp sr14
 sr10:   jc sr20         ; If not pawn, jump,
         cmp dh,2        ; Diagonal? 
         ja sr16         ; Yes, avoid
+    %if HACK
+        cmc
+        sbb dh,al
+    %else
         jnz short sr20  ; Advances one square? No, jump.
         xchg ax,si
         push ax
@@ -271,6 +249,7 @@ sr10:   jc sr20         ; If not pawn, jump,
         pop ax
         xchg ax,si
         sbb dh,al       ; Yes, then avoid checking for two squares
+    %endif
         jmp short sr20
 
         ; Read algebraic coordinate
@@ -304,6 +283,9 @@ initial:
 scores:
         db FRONTIER     ; Self-modified to zero
         db 1,5,3,9,3
+    %if HACK
+        db 46
+    %endif
 
 chars:
         db 0x2e+0x00
@@ -328,12 +310,16 @@ displacement:
         db -16,16,-1,1
         db 15,17,-15,-17
         db 15,17,16,32
-        db -15,-17,-16,-32
+        db -15,-17,-16
+    %if HACK
+    %else
+        db -32
+    %endif
 
     %if com_file
     %else
         ; Many bytes to say something
-        db "Toledo Atomchess. Dec/10/2019"
+        db "Toledo Atomchess. Dec/15/2019"
         db " (c) 2015-2019 Oscar Toledo G. "
         db "www.nanochess.org"
         db " Happy coding! :-) "
