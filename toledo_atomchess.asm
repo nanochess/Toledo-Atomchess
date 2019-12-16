@@ -7,6 +7,10 @@
         ;
         ; Creation: Jan/28/2015 21:00 local time.
         ;
+        ; With contributions by Peter Ferrie (qkumba),
+        ;                       HellMood, qu1j0t3,
+        ;                       and theshich.
+        ;
         ; Latest version and logs at https://github.com/nanochess
         ; Previous version published in Programming Boot Sector Games
         ;
@@ -33,7 +37,7 @@
 
         cpu 286
 
-HACK:   equ 1
+HACK:   equ 0
 
         ; Edit this to 0 for a bootable sector
         ; Edit this to 1 for a COM file
