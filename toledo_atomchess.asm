@@ -26,8 +26,8 @@
         ;   o No en passant.
         ;   o 356 bytes size (runs in a boot sector) or 352 bytes (COM file)
         ;
-        ; Enable the HACK label for getting 331 bytes (boot sector)
-        ; or 327 bytes (COM file), it will remove the following features:
+        ; Enable the HACK label for getting 330 bytes (boot sector)
+        ; or 326 bytes (COM file), it will remove the following features:
         ;
         ;   o Game randomization (it will play the same game always).
         ;   o Shortest mate search (it can defer checkmate or delay it).
@@ -302,7 +302,11 @@ chars:
 
 offsets:
         db (16+displacement-start) & 255
+    %if HACK
+        db (19+displacement-start) & 255
+    %else
         db (20+displacement-start) & 255
+    %endif
         db (8+displacement-start) & 255
         db (12+displacement-start) & 255
         db (8+displacement-start) & 255
@@ -312,7 +316,11 @@ displacement:
         db -33,-31,-18,-14,14,18,31,33
         db -16,16,-1,1
         db 15,17,-15,-17
-        db 15,17,16,32
+        db 15,17,16
+    %if HACK
+    %else
+        db 32
+    %endif
         db -15,-17,-16
     %if HACK
     %else
